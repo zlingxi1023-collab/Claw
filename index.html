@@ -2,9 +2,15 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#FFF8E7">
+    <meta name="format-detection" content="telephone=no">
     <title>Try Everything 歌词学习卡片 🎵</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- 预连接音频资源 -->
+    <link rel="preload" href="audio/stage1_card1.mp3" as="audio">
 </head>
 <body>
     <div class="container">
@@ -23,16 +29,18 @@
             <div class="music-header">
                 <span class="music-icon">🎵</span>
                 <span class="music-title">原曲已内嵌 · 边听边学</span>
-                <span class="music-artist">Shakira - Try Everything</span>
+                <span class="music-artist">Shakira</span>
             </div>
-            <p class="music-tip">🎧 每张卡片都配有对应的原曲片段，点击 ▶ 按钮即可播放！<br>💡 也可以点击下方「连续播放」按钮，自动播放当前阶段所有卡片~</p>
+            <p class="music-tip">🎧 每张卡片配有原曲片段，点击 ▶ 播放<br>💡 点击「连续播放」自动播放当前阶段~</p>
         </div>
 
         <!-- 进度指示器 -->
         <div class="progress-bar">
             <div class="progress-fill" id="progressFill"></div>
         </div>
-        <div class="stage-nav">
+
+        <!-- 阶段导航 — 可横向滚动 -->
+        <div class="stage-nav" id="stageNav">
             <button class="stage-btn active" data-stage="1">第1阶段</button>
             <button class="stage-btn" data-stage="2">第2阶段</button>
             <button class="stage-btn" data-stage="3">第3阶段</button>

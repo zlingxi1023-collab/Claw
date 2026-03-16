@@ -1,6 +1,6 @@
 /**
  * Try Everything 歌词学习卡片
- * 交互逻辑和歌词数据 — 带音频播放版本
+ * 交互逻辑和歌词数据 — 带音频播放 + 移动端适配版本
  */
 
 // 分阶段歌词数据 — 基于 QQ 音乐 LRC 歌词精确时间戳切割
@@ -203,16 +203,25 @@ const tips = [
     "可以配合动作一起记忆歌词！",
     "点击 ▶ 播放原曲片段，跟着唱~",
     "大声唱出来，不要害羞！",
-    "和爸爸妈妈一起练习更有趣！"
+    "和爸爸妈妈一起练习更有趣！",
+    "👈👉 左右滑动可以切换阶段哦！"
 ];
 
 // 当前状态
 let currentStage = 1;
 let currentCardIndex = 0;
 let completedStages = new Set();
-let currentAudio = null; // 当前播放的音频
-let isAutoPlaying = false; // 是否正在自动播放模式
-let autoPlayQueue = []; // 自动播放队列
+let currentAudio = null;
+let isAutoPlaying = false;
+let autoPlayQueue = [];
+
+// 触控滑动状态
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+const SWIPE_THRESHOLD = 50;
+const SWIPE_VERTICAL_LIMIT = 100;
 
 // DOM元素
 const cardsWrapper = document.getElementById('cardsWrapper');
@@ -222,14 +231,32 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const flipAllBtn = document.getElementById('flipAllBtn');
 const stageBtns = document.querySelectorAll('.stage-btn');
+const stageNav = document.getElementById('stageNav');
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
     renderStage(currentStage);
     updateProgress();
     setupEventListeners();
+    setupTouchGestures();
     showRandomTip();
+    adjustCardHeights();
+
+    // 监听窗口变化重新计算高度
+    window.addEventListener('resize', debounce(adjustCardHeights, 200));
+    window.addEventListener('orientationchange', () => {
+        setTimeout(adjustCardHeights, 300);
+    });
 });
+
+// 防抖函数
+function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
 
 // 停止当前播放
 function stopCurrentAudio() {
@@ -240,12 +267,11 @@ function stopCurrentAudio() {
     }
     isAutoPlaying = false;
     autoPlayQueue = [];
-    // 重置所有播放按钮状态
     document.querySelectorAll('.audio-play-btn').forEach(btn => {
         btn.classList.remove('playing');
-        btn.querySelector('.play-icon').textContent = '▶';
+        const icon = btn.querySelector('.play-icon');
+        if (icon) icon.textContent = '▶';
     });
-    // 重置所有进度条
     document.querySelectorAll('.audio-progress-fill').forEach(bar => {
         bar.style.width = '0%';
     });
@@ -259,10 +285,10 @@ function playAudio(audioSrc, btnElement) {
     
     if (btnElement) {
         btnElement.classList.add('playing');
-        btnElement.querySelector('.play-icon').textContent = '⏸';
+        const icon = btnElement.querySelector('.play-icon');
+        if (icon) icon.textContent = '⏸';
     }
 
-    // 找到对应的进度条
     const card = btnElement ? btnElement.closest('.flip-card') : null;
     const progressBar = card ? card.querySelector('.audio-progress-fill') : null;
 
@@ -276,14 +302,14 @@ function playAudio(audioSrc, btnElement) {
     currentAudio.addEventListener('ended', () => {
         if (btnElement) {
             btnElement.classList.remove('playing');
-            btnElement.querySelector('.play-icon').textContent = '▶';
+            const icon = btnElement.querySelector('.play-icon');
+            if (icon) icon.textContent = '▶';
         }
         if (progressBar) {
             progressBar.style.width = '0%';
         }
         currentAudio = null;
 
-        // 如果是自动播放模式，播放下一个
         if (isAutoPlaying && autoPlayQueue.length > 0) {
             const next = autoPlayQueue.shift();
             setTimeout(() => {
@@ -292,14 +318,20 @@ function playAudio(audioSrc, btnElement) {
             }, 500);
         } else {
             isAutoPlaying = false;
+            const autoPlayBtn = document.getElementById('autoPlayBtn');
+            if (autoPlayBtn) {
+                autoPlayBtn.querySelector('.btn-icon').textContent = '🎵';
+                autoPlayBtn.querySelector('span:last-child').textContent = '连续播放';
+            }
         }
     });
 
     currentAudio.play().catch(e => {
-        console.log('播放失败（可能需要用户交互）:', e);
+        console.log('播放失败:', e);
         if (btnElement) {
             btnElement.classList.remove('playing');
-            btnElement.querySelector('.play-icon').textContent = '▶';
+            const icon = btnElement.querySelector('.play-icon');
+            if (icon) icon.textContent = '▶';
         }
     });
 }
@@ -323,7 +355,7 @@ function autoPlayStage() {
     const cards = document.querySelectorAll('.flip-card');
     
     stage.cards.forEach((cardData, index) => {
-        if (index === 0) return; // 第一个直接播放
+        if (index === 0) return;
         const btn = cards[index] ? cards[index].querySelector('.audio-play-btn') : null;
         autoPlayQueue.push({
             src: cardData.audio,
@@ -332,7 +364,6 @@ function autoPlayStage() {
         });
     });
 
-    // 播放第一张卡片
     const firstBtn = cards[0] ? cards[0].querySelector('.audio-play-btn') : null;
     highlightCard(0);
     playAudio(stage.cards[0].audio, firstBtn);
@@ -351,11 +382,13 @@ function renderStage(stageNum) {
         cardsWrapper.appendChild(cardEl);
     });
 
-    // 更新提示
     tipText.textContent = stage.tip;
-    
-    // 更新阶段按钮状态
     updateStageBtns();
+    
+    // 渲染后调整高度
+    requestAnimationFrame(() => {
+        adjustCardHeights();
+    });
 }
 
 // 创建卡片元素
@@ -364,7 +397,6 @@ function createCardElement(cardData, cardNum) {
     card.className = 'flip-card';
     card.dataset.index = cardNum - 1;
 
-    // 构建节奏显示
     const rhythmHtml = cardData.rhythm.map((beat, idx) => {
         const isStrong = cardData.strongBeats.includes(idx);
         return `<span class="rhythm-beat ${isStrong ? 'strong' : ''}">${beat}</span>`;
@@ -401,13 +433,12 @@ function createCardElement(cardData, cardNum) {
         </div>
     `;
 
-    // 播放按钮 - 阻止冒泡，不触发翻转
+    // 播放按钮事件
     card.querySelectorAll('.audio-play-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const audioSrc = btn.dataset.audio;
             
-            // 如果正在播放同一个音频，暂停
             if (currentAudio && !currentAudio.paused && btn.classList.contains('playing')) {
                 stopCurrentAudio();
                 return;
@@ -417,7 +448,7 @@ function createCardElement(cardData, cardNum) {
         });
     });
 
-    // 点击卡片翻转（排除播放按钮区域）
+    // 点击卡片翻转
     card.addEventListener('click', (e) => {
         if (!e.target.closest('.audio-play-btn') && !e.target.closest('.audio-player-inline')) {
             card.classList.toggle('flipped');
@@ -425,6 +456,41 @@ function createCardElement(cardData, cardNum) {
     });
 
     return card;
+}
+
+// 动态调整卡片高度，使翻转时不会跳动
+function adjustCardHeights() {
+    const cards = document.querySelectorAll('.flip-card');
+    cards.forEach(card => {
+        const inner = card.querySelector('.flip-card-inner');
+        const front = card.querySelector('.flip-card-front');
+        const back = card.querySelector('.flip-card-back');
+        
+        if (!inner || !front || !back) return;
+
+        // 先重置高度以获得自然高度
+        card.style.height = 'auto';
+        inner.style.height = 'auto';
+        front.style.position = 'relative';
+        back.style.position = 'relative';
+        front.style.height = 'auto';
+        back.style.height = 'auto';
+
+        // 获取两面的自然高度
+        const frontH = front.scrollHeight;
+        const backH = back.scrollHeight;
+        const maxH = Math.max(frontH, backH, 180);
+
+        // 设置统一高度
+        card.style.height = maxH + 'px';
+        inner.style.height = maxH + 'px';
+        front.style.position = 'absolute';
+        back.style.position = 'absolute';
+        front.style.height = maxH + 'px';
+        back.style.height = maxH + 'px';
+        front.style.minHeight = 'unset';
+        back.style.minHeight = 'unset';
+    });
 }
 
 // 获取随机鼓励语
@@ -450,21 +516,20 @@ function setupEventListeners() {
         });
     });
 
-    // 上一句/下一句
+    // 上一阶段
     prevBtn.addEventListener('click', () => {
         if (currentStage > 1) {
             switchStage(currentStage - 1);
         }
     });
 
+    // 下一阶段
     nextBtn.addEventListener('click', () => {
-        // 标记当前阶段完成
         completedStages.add(currentStage);
         
         if (currentStage < 6) {
             switchStage(currentStage + 1);
         } else {
-            // 全部完成
             celebrateCompletion();
         }
         updateProgress();
@@ -495,15 +560,72 @@ function setupEventListeners() {
     }
 }
 
+// 触控手势 — 左右滑动切换阶段
+function setupTouchGestures() {
+    const container = document.querySelector('.container');
+    if (!container) return;
+
+    container.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    container.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipe();
+    }, { passive: true });
+}
+
+function handleSwipe() {
+    const diffX = touchEndX - touchStartX;
+    const diffY = Math.abs(touchEndY - touchStartY);
+
+    // 只处理水平滑动，忽略垂直滑动
+    if (Math.abs(diffX) < SWIPE_THRESHOLD || diffY > SWIPE_VERTICAL_LIMIT) return;
+
+    // 不在输入框或按钮区域时才处理
+    if (diffX < 0) {
+        // 向左滑 → 下一阶段
+        if (currentStage < 6) {
+            completedStages.add(currentStage);
+            switchStage(currentStage + 1);
+            updateProgress();
+        }
+    } else {
+        // 向右滑 → 上一阶段
+        if (currentStage > 1) {
+            switchStage(currentStage - 1);
+        }
+    }
+}
+
 // 切换阶段
 function switchStage(stageNum) {
     currentStage = stageNum;
     renderStage(stageNum);
     updateStageBtns();
     updateProgress();
+    scrollStageNavToActive();
     
     // 滚动到卡片区域
     cardsWrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// 阶段导航按钮自动滚动到当前激活的位置
+function scrollStageNavToActive() {
+    if (!stageNav) return;
+    const activeBtn = stageNav.querySelector('.stage-btn.active');
+    if (!activeBtn) return;
+
+    const navRect = stageNav.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    const scrollLeft = activeBtn.offsetLeft - (navRect.width / 2) + (btnRect.width / 2);
+    
+    stageNav.scrollTo({
+        left: scrollLeft,
+        behavior: 'smooth'
+    });
 }
 
 // 更新阶段按钮状态
@@ -545,8 +667,6 @@ function celebrateCompletion() {
     });
     
     tipText.textContent = "🎉 太棒了！你已经学完所有阶段！可以完整唱这首歌了！";
-    
-    // 添加庆祝效果
     createConfetti();
 }
 
@@ -570,13 +690,10 @@ function createConfetti() {
                 animation: confettiFall ${2 + Math.random() * 2}s linear forwards;
             `;
             document.body.appendChild(confetti);
-            
-            // 移除彩带
             setTimeout(() => confetti.remove(), 4000);
         }, i * 50);
     }
     
-    // 添加彩带下落动画
     if (!document.querySelector('#confetti-style')) {
         const style = document.createElement('style');
         style.id = 'confetti-style';
@@ -611,7 +728,6 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'p':
         case 'P':
-            // P键触发自动播放
             const autoPlayBtn = document.getElementById('autoPlayBtn');
             if (autoPlayBtn) autoPlayBtn.click();
             break;

@@ -1708,3 +1708,482 @@ body {
     background: linear-gradient(135deg, #1DB954 0%, #1ED760 100%);
     color: white;
 }
+
+/* ========================================
+   全屏歌曲播放器 — Full Player Overlay
+   ======================================== */
+
+/* Overlay 全屏容器 */
+.full-player-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+    overflow: hidden;
+}
+
+.full-player-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 顶部固定控制栏 */
+.fp-controls {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    background: rgba(26, 26, 46, 0.85);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: 60px;
+    gap: 12px;
+}
+
+/* 关闭按钮 */
+.fp-close-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: #FFFFFF;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.fp-close-btn:active {
+    transform: scale(0.9);
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* 中间进度信息 */
+.fp-progress-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.fp-progress-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    font-family: 'PingFang SC', -apple-system, sans-serif;
+    white-space: nowrap;
+}
+
+.fp-progress-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.fp-progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--primary-orange), var(--accent-yellow), var(--primary-teal));
+    background-size: 200%;
+    border-radius: 2px;
+    transition: width 0.15s linear;
+    animation: shimmer 2s infinite;
+}
+
+/* 播放/暂停按钮 */
+.fp-play-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, var(--primary-orange), #FF8E53);
+    color: #FFFFFF;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.fp-play-btn:active {
+    transform: scale(0.9);
+}
+
+.fp-play-btn.playing {
+    background: linear-gradient(135deg, var(--primary-teal), #2ECC71);
+    box-shadow: 0 4px 15px rgba(78, 205, 196, 0.4);
+}
+
+/* 歌词卡片滚动区域 */
+.fp-cards-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    scroll-behavior: smooth;
+}
+
+/* 自定义滚动条 */
+.fp-cards-scroll::-webkit-scrollbar {
+    width: 3px;
+}
+
+.fp-cards-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fp-cards-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+/* 阶段分隔标题 */
+.fp-stage-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 24px 0 14px;
+    padding: 0 4px;
+}
+
+.fp-stage-divider:first-child {
+    margin-top: 0;
+}
+
+.fp-stage-divider::before,
+.fp-stage-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+}
+
+.fp-stage-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'PingFang SC', -apple-system, sans-serif;
+}
+
+/* 简化版歌词卡片 */
+.fp-card {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 18px 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.fp-card:active {
+    transform: scale(0.98);
+}
+
+/* 非播放卡片淡出 */
+.full-player-overlay.is-playing .fp-card {
+    opacity: 0.4;
+    transform: scale(0.98);
+}
+
+.full-player-overlay.is-playing .fp-card.now-playing {
+    opacity: 1;
+    transform: scale(1.02);
+}
+
+/* 当前播放卡片 — 高亮发光 */
+.fp-card.now-playing {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: transparent;
+    box-shadow:
+        0 0 0 2px rgba(255, 107, 53, 0.5),
+        0 0 30px rgba(255, 107, 53, 0.15),
+        0 8px 32px rgba(0, 0, 0, 0.3);
+    animation: fpCardGlow 2s ease-in-out infinite;
+}
+
+@keyframes fpCardGlow {
+    0%, 100% {
+        box-shadow:
+            0 0 0 2px rgba(255, 107, 53, 0.5),
+            0 0 20px rgba(255, 107, 53, 0.1),
+            0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    50% {
+        box-shadow:
+            0 0 0 2px rgba(78, 205, 196, 0.6),
+            0 0 40px rgba(78, 205, 196, 0.15),
+            0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+}
+
+/* 播放指示器 — 声波动画 */
+.fp-card-indicator {
+    position: absolute;
+    top: 16px;
+    right: 14px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 16px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.fp-card.now-playing .fp-card-indicator {
+    opacity: 1;
+}
+
+.fp-card-indicator span {
+    display: block;
+    width: 3px;
+    background: linear-gradient(to top, var(--primary-orange), var(--primary-teal));
+    border-radius: 2px;
+    animation: fpSoundWave 0.8s ease-in-out infinite alternate;
+}
+
+.fp-card-indicator span:nth-child(1) { height: 6px; animation-delay: 0s; }
+.fp-card-indicator span:nth-child(2) { height: 12px; animation-delay: 0.15s; }
+.fp-card-indicator span:nth-child(3) { height: 8px; animation-delay: 0.3s; }
+.fp-card-indicator span:nth-child(4) { height: 14px; animation-delay: 0.45s; }
+
+@keyframes fpSoundWave {
+    0% { transform: scaleY(0.4); }
+    100% { transform: scaleY(1); }
+}
+
+/* 卡片序号 */
+.fp-card-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 8px;
+    font-family: 'PingFang SC', -apple-system, sans-serif;
+}
+
+.fp-card.now-playing .fp-card-num {
+    color: var(--primary-orange);
+}
+
+/* 卡片歌词 */
+.fp-card-lyrics {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    line-height: 1.7;
+    text-align: left;
+    white-space: pre-line;
+    word-break: break-word;
+    margin-bottom: 6px;
+    transition: color 0.3s ease;
+}
+
+.fp-card.now-playing .fp-card-lyrics {
+    background: linear-gradient(90deg, #FFFFFF, var(--accent-yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* 卡片拼读 */
+.fp-card-phonetic {
+    font-size: 0.8rem;
+    color: var(--primary-orange);
+    font-style: italic;
+    margin-bottom: 6px;
+    opacity: 0.8;
+}
+
+/* 卡片翻译 */
+.fp-card-translation {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.fp-card.now-playing .fp-card-translation {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* ========================================
+   全屏播放器 — 响应式适配
+   ======================================== */
+
+/* 390px+ */
+@media (min-width: 390px) {
+    .fp-cards-scroll {
+        padding: 24px 20px;
+        padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .fp-card {
+        padding: 20px 18px;
+        border-radius: 18px;
+    }
+
+    .fp-card-lyrics {
+        font-size: 1.2rem;
+    }
+}
+
+/* 430px+ */
+@media (min-width: 430px) {
+    .fp-controls {
+        padding: 14px 20px;
+        padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    }
+
+    .fp-card-lyrics {
+        font-size: 1.25rem;
+    }
+
+    .fp-card-translation {
+        font-size: 0.9rem;
+    }
+}
+
+/* 768px+ 平板 */
+@media (min-width: 768px) {
+    .fp-controls {
+        padding: 16px 24px;
+        padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    }
+
+    .fp-cards-scroll {
+        padding: 30px;
+        padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+        max-width: 640px;
+        margin: 0 auto;
+    }
+
+    .fp-card {
+        padding: 24px 22px;
+        border-radius: 20px;
+    }
+
+    .fp-card-lyrics {
+        font-size: 1.35rem;
+    }
+
+    .fp-card-translation {
+        font-size: 0.95rem;
+    }
+
+    .fp-progress-text {
+        font-size: 0.95rem;
+    }
+
+    .fp-stage-title {
+        font-size: 0.9rem;
+    }
+}
+
+/* 1024px+ 桌面 */
+@media (min-width: 1024px) {
+    .fp-cards-scroll {
+        max-width: 700px;
+    }
+
+    .fp-card:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .fp-close-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .fp-play-btn:hover {
+        transform: scale(1.08);
+    }
+}
+
+/* iPhone 横屏 */
+@media (max-height: 450px) and (orientation: landscape) {
+    .fp-controls {
+        min-height: 48px;
+        padding: 8px 16px;
+        padding-top: calc(8px + env(safe-area-inset-top, 0px));
+    }
+
+    .fp-cards-scroll {
+        padding: 12px 16px;
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+    }
+
+    .fp-card {
+        padding: 12px;
+        margin-bottom: 8px;
+    }
+
+    .fp-card-lyrics {
+        font-size: 1rem;
+    }
+}
+
+/* ========================================
+   全屏播放器 — 暗色模式
+   （全屏播放器本身就是深色背景，无需大改）
+   ======================================== */
+@media (prefers-color-scheme: dark) {
+    .fp-card {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.06);
+    }
+}
+
+/* ========================================
+   全屏播放器 — 减少动画（无障碍）
+   ======================================== */
+@media (prefers-reduced-motion: reduce) {
+    .full-player-overlay {
+        transition: none;
+    }
+
+    .fp-card {
+        transition: none;
+    }
+
+    .fp-card.now-playing {
+        animation: none;
+    }
+
+    .fp-card-indicator span {
+        animation: none;
+    }
+}

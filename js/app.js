@@ -318,11 +318,6 @@ function playAudio(audioSrc, btnElement) {
             }, 500);
         } else {
             isAutoPlaying = false;
-            const autoPlayBtn = document.getElementById('autoPlayBtn');
-            if (autoPlayBtn) {
-                autoPlayBtn.querySelector('.btn-icon').textContent = '🎵';
-                autoPlayBtn.querySelector('span:last-child').textContent = '连续播放';
-            }
         }
     });
 
@@ -343,31 +338,7 @@ function highlightCard(index) {
     });
 }
 
-// 自动播放整个阶段
-function autoPlayStage() {
-    const stage = stagesData[currentStage];
-    if (!stage) return;
-
-    stopCurrentAudio();
-    isAutoPlaying = true;
-    autoPlayQueue = [];
-
-    const cards = document.querySelectorAll('.flip-card');
-    
-    stage.cards.forEach((cardData, index) => {
-        if (index === 0) return;
-        const btn = cards[index] ? cards[index].querySelector('.audio-play-btn') : null;
-        autoPlayQueue.push({
-            src: cardData.audio,
-            btn: btn,
-            index: index
-        });
-    });
-
-    const firstBtn = cards[0] ? cards[0].querySelector('.audio-play-btn') : null;
-    highlightCard(0);
-    playAudio(stage.cards[0].audio, firstBtn);
-}
+// autoPlayStage 已移除 — 改为全屏播放模式（见文件底部 FullPlayer）
 
 // 渲染当前阶段的卡片
 function renderStage(stageNum) {
@@ -543,19 +514,11 @@ function setupEventListeners() {
         });
     });
 
-    // 自动播放按钮
+    // 全部播放按钮 → 打开全屏歌曲播放器
     const autoPlayBtn = document.getElementById('autoPlayBtn');
     if (autoPlayBtn) {
         autoPlayBtn.addEventListener('click', () => {
-            if (isAutoPlaying) {
-                stopCurrentAudio();
-                autoPlayBtn.querySelector('.btn-icon').textContent = '🎵';
-                autoPlayBtn.querySelector('span:last-child').textContent = '连续播放';
-            } else {
-                autoPlayStage();
-                autoPlayBtn.querySelector('.btn-icon').textContent = '⏹';
-                autoPlayBtn.querySelector('span:last-child').textContent = '停止播放';
-            }
+            FullPlayer.open();
         });
     }
 }
@@ -728,8 +691,307 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'p':
         case 'P':
-            const autoPlayBtn = document.getElementById('autoPlayBtn');
-            if (autoPlayBtn) autoPlayBtn.click();
+            FullPlayer.open();
             break;
     }
 });
+
+/* ========================================
+   全屏歌曲播放器 — FullPlayer
+   ======================================== */
+const FullPlayer = (() => {
+    // DOM 引用
+    const overlay = document.getElementById('fullPlayerOverlay');
+    const cardsScroll = document.getElementById('fpCardsScroll');
+    const closeBtn = document.getElementById('fpCloseBtn');
+    const playBtn = document.getElementById('fpPlayBtn');
+    const playIcon = document.getElementById('fpPlayIcon');
+    const progressText = document.getElementById('fpProgressText');
+    const progressBarFill = document.getElementById('fpProgressBarFill');
+
+    // 状态
+    let allCards = [];       // 扁平化的所有卡片数据
+    let currentIndex = -1;   // 当前播放索引
+    let isPlaying = false;
+    let audio = null;
+    let progressTimer = null;
+
+    // 构建扁平化数据
+    function buildAllCards() {
+        allCards = [];
+        for (let stageNum = 1; stageNum <= 6; stageNum++) {
+            const stage = stagesData[stageNum];
+            if (!stage) continue;
+            stage.cards.forEach((card, idx) => {
+                allCards.push({
+                    stageNum,
+                    stageTitle: stage.title,
+                    cardIndex: idx,
+                    lyrics: card.lyrics,
+                    phonetic: card.phonetic,
+                    translation: card.translation,
+                    audio: card.audio
+                });
+            });
+        }
+    }
+
+    // 渲染全屏卡片列表
+    function renderCards() {
+        cardsScroll.innerHTML = '';
+        let lastStageNum = 0;
+
+        allCards.forEach((card, index) => {
+            // 阶段分隔标题
+            if (card.stageNum !== lastStageNum) {
+                lastStageNum = card.stageNum;
+                const divider = document.createElement('div');
+                divider.className = 'fp-stage-divider';
+                divider.innerHTML = `<span class="fp-stage-title">${card.stageTitle}</span>`;
+                cardsScroll.appendChild(divider);
+            }
+
+            // 卡片
+            const cardEl = document.createElement('div');
+            cardEl.className = 'fp-card';
+            cardEl.dataset.fpIndex = index;
+            cardEl.innerHTML = `
+                <div class="fp-card-indicator">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                <div class="fp-card-num">#${index + 1}</div>
+                <div class="fp-card-lyrics">${card.lyrics}</div>
+                <div class="fp-card-phonetic">🔤 ${card.phonetic}</div>
+                <div class="fp-card-translation">${card.translation}</div>
+            `;
+
+            // 点击卡片跳转播放
+            cardEl.addEventListener('click', () => {
+                jumpToCard(index);
+            });
+
+            cardsScroll.appendChild(cardEl);
+        });
+    }
+
+    // 更新进度 UI
+    function updateProgressUI() {
+        const total = allCards.length;
+        const current = currentIndex + 1;
+        progressText.textContent = `第 ${current} / ${total} 句`;
+
+        // 当前句音频进度
+        if (audio && audio.duration && !isNaN(audio.duration)) {
+            const pct = (audio.currentTime / audio.duration) * 100;
+            progressBarFill.style.width = pct + '%';
+        }
+    }
+
+    // 启动进度条定时器
+    function startProgressTimer() {
+        stopProgressTimer();
+        progressTimer = setInterval(updateProgressUI, 100);
+    }
+
+    function stopProgressTimer() {
+        if (progressTimer) {
+            clearInterval(progressTimer);
+            progressTimer = null;
+        }
+    }
+
+    // 高亮当前卡片 + 自动滚动
+    function highlightCurrentCard() {
+        const allCardEls = cardsScroll.querySelectorAll('.fp-card');
+        allCardEls.forEach((el, i) => {
+            el.classList.toggle('now-playing', i === currentIndex);
+        });
+
+        // 自动滚动到当前卡片
+        const target = allCardEls[currentIndex];
+        if (target) {
+            // 稍微延迟以确保 DOM 已更新
+            requestAnimationFrame(() => {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        }
+
+        // 添加/移除 is-playing 类来实现淡出效果
+        if (isPlaying) {
+            overlay.classList.add('is-playing');
+        }
+    }
+
+    // 播放指定索引的卡片
+    function playCard(index) {
+        if (index < 0 || index >= allCards.length) {
+            // 播放完所有歌曲
+            stopPlayback();
+            return;
+        }
+
+        currentIndex = index;
+        const cardData = allCards[index];
+
+        // 停止当前音频
+        if (audio) {
+            audio.pause();
+            audio.removeEventListener('ended', onAudioEnded);
+            audio.removeEventListener('error', onAudioError);
+        }
+
+        audio = new Audio(cardData.audio);
+        audio.addEventListener('ended', onAudioEnded);
+        audio.addEventListener('error', onAudioError);
+
+        isPlaying = true;
+        playIcon.textContent = '⏸';
+        playBtn.classList.add('playing');
+
+        highlightCurrentCard();
+        updateProgressUI();
+        startProgressTimer();
+
+        audio.play().catch(e => {
+            console.log('全屏播放器播放失败:', e);
+            // 尝试通过用户交互恢复
+        });
+    }
+
+    // 音频播放完毕 → 自动下一首
+    function onAudioEnded() {
+        progressBarFill.style.width = '0%';
+        playNext();
+    }
+
+    // 音频错误处理
+    function onAudioError(e) {
+        console.log('音频加载失败:', e);
+        // 跳到下一首
+        setTimeout(() => playNext(), 300);
+    }
+
+    // 播放下一首
+    function playNext() {
+        if (currentIndex < allCards.length - 1) {
+            playCard(currentIndex + 1);
+        } else {
+            // 全部播放完毕
+            stopPlayback();
+        }
+    }
+
+    // 跳转到指定卡片
+    function jumpToCard(index) {
+        playCard(index);
+    }
+
+    // 暂停
+    function pause() {
+        if (audio && !audio.paused) {
+            audio.pause();
+            isPlaying = false;
+            playIcon.textContent = '▶';
+            playBtn.classList.remove('playing');
+            overlay.classList.remove('is-playing');
+            stopProgressTimer();
+        }
+    }
+
+    // 恢复播放
+    function resume() {
+        if (audio && audio.paused && currentIndex >= 0) {
+            audio.play().catch(() => {});
+            isPlaying = true;
+            playIcon.textContent = '⏸';
+            playBtn.classList.add('playing');
+            overlay.classList.add('is-playing');
+            startProgressTimer();
+        }
+    }
+
+    // 停止播放（全部结束或关闭）
+    function stopPlayback() {
+        if (audio) {
+            audio.pause();
+            audio.removeEventListener('ended', onAudioEnded);
+            audio.removeEventListener('error', onAudioError);
+            audio = null;
+        }
+        isPlaying = false;
+        playIcon.textContent = '▶';
+        playBtn.classList.remove('playing');
+        overlay.classList.remove('is-playing');
+        progressBarFill.style.width = '0%';
+        stopProgressTimer();
+
+        // 移除所有高亮
+        const allCardEls = cardsScroll.querySelectorAll('.fp-card');
+        allCardEls.forEach(el => el.classList.remove('now-playing'));
+    }
+
+    // 打开全屏播放器
+    function open() {
+        // 先停止主页面的音频
+        stopCurrentAudio();
+
+        // 构建数据 & 渲染
+        buildAllCards();
+        renderCards();
+
+        // 显示 overlay
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        // 重置状态
+        currentIndex = -1;
+        progressBarFill.style.width = '0%';
+        progressText.textContent = `第 1 / ${allCards.length} 句`;
+
+        // 自动从第一句开始播放
+        setTimeout(() => {
+            playCard(0);
+        }, 400);
+    }
+
+    // 关闭全屏播放器
+    function close() {
+        stopPlayback();
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        currentIndex = -1;
+    }
+
+    // 事件绑定
+    if (closeBtn) {
+        closeBtn.addEventListener('click', close);
+    }
+
+    if (playBtn) {
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                pause();
+            } else if (currentIndex >= 0) {
+                resume();
+            } else {
+                // 还没开始播放
+                playCard(0);
+            }
+        });
+    }
+
+    // ESC 关闭
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('active')) {
+            close();
+        }
+    });
+
+    // 点击 overlay 背景不关闭（防止误操作）
+
+    // 暴露公共方法
+    return {
+        open,
+        close
+    };
+})();

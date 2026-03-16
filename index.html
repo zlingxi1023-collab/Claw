@@ -31,7 +31,7 @@
                 <span class="music-title">原曲已内嵌 · 边听边学</span>
                 <span class="music-artist">Shakira</span>
             </div>
-            <p class="music-tip">🎧 每张卡片配有原曲片段，点击 ▶ 播放<br>💡 点击「连续播放」自动播放当前阶段~</p>
+            <p class="music-tip">🎧 每张卡片配有原曲片段，点击 ▶ 播放<br>💡 点击「🎵 全部播放」开启沉浸式跟唱模式~</p>
         </div>
 
         <!-- 进度指示器 -->
@@ -91,7 +91,7 @@
             </button>
             <button class="control-btn autoplay-btn" id="autoPlayBtn">
                 <span class="btn-icon">🎵</span>
-                <span>连续播放</span>
+                <span>全部播放</span>
             </button>
             <button class="control-btn flip-btn" id="flipAllBtn">
                 <span class="btn-icon">🔄</span>
@@ -123,6 +123,27 @@
             </div>
             <p>🎬 加油！你一定能学会这首歌！🌟</p>
         </footer>
+    </div>
+
+    <!-- 全屏歌曲播放器 Overlay -->
+    <div class="full-player-overlay" id="fullPlayerOverlay">
+        <!-- 顶部固定控制栏 -->
+        <div class="fp-controls">
+            <button class="fp-close-btn" id="fpCloseBtn" title="关闭">✕</button>
+            <div class="fp-progress-info">
+                <span class="fp-progress-text" id="fpProgressText">第 1 / 19 句</span>
+                <div class="fp-progress-bar">
+                    <div class="fp-progress-bar-fill" id="fpProgressBarFill"></div>
+                </div>
+            </div>
+            <button class="fp-play-btn" id="fpPlayBtn" title="播放/暂停">
+                <span id="fpPlayIcon">▶</span>
+            </button>
+        </div>
+        <!-- 歌词卡片滚动区域 -->
+        <div class="fp-cards-scroll" id="fpCardsScroll">
+            <!-- 卡片通过 JS 动态渲染 -->
+        </div>
     </div>
 
     <script src="js/app.js"></script>

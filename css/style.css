@@ -900,12 +900,13 @@ body {
 }
 
 .card-lyrics {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 700;
     color: var(--text-dark);
     text-align: center;
     line-height: 1.6;
     margin-bottom: 10px;
+    white-space: pre-line;
 }
 
 .card-phonetic {
@@ -942,6 +943,7 @@ body {
     font-weight: 600;
     text-align: center;
     line-height: 1.6;
+    white-space: pre-line;
 }
 
 .card-tip {

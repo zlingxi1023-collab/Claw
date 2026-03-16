@@ -3,24 +3,24 @@
  * 交互逻辑和歌词数据 — 带音频播放版本
  */
 
-// 分阶段歌词数据，每张卡片关联对应的音频片段
+// 分阶段歌词数据 — 基于 QQ 音乐 LRC 歌词精确时间戳切割
 const stagesData = {
     1: {
         title: "第1阶段：开场哼唱",
-        tip: "🎧 点击播放按钮听原曲，跟着节奏哼唱 Oh~",
+        tip: "🎧 跟着节奏哼唱 Oh~，感受欢快的旋律！",
         cards: [
             {
-                lyrics: "Oh oh oh oh oooh",
-                phonetic: "哦 哦 哦 哦 哦~",
-                translation: "（欢快的开场哼唱）",
+                lyrics: "Oh oh oh oh oooh\nOh oh oh oh oooh",
+                phonetic: "哦 哦 哦 哦 哦~ × 2",
+                translation: "（欢快的开场哼唱，连续两遍）",
                 rhythm: ["Oh", "oh", "oh", "oh", "oooh~"],
                 strongBeats: [0, 4],
                 audio: "audio/stage1_card1.mp3"
             },
             {
-                lyrics: "Oh oh oh oh oooh",
-                phonetic: "哦 哦 哦 哦 哦~",
-                translation: "（重复四遍，建立节奏感）",
+                lyrics: "Oh oh oh oh oooh\nOh oh oh oh oooh",
+                phonetic: "哦 哦 哦 哦 哦~ × 2",
+                translation: "（再来两遍，建立节奏感）",
                 rhythm: ["Oh", "oh", "oh", "oh", "oooh~"],
                 strongBeats: [0, 4],
                 audio: "audio/stage1_card2.mp3"
@@ -28,146 +28,168 @@ const stagesData = {
         ]
     },
     2: {
-        title: "第2阶段：核心主题句",
-        tip: "🎧 这是整首歌最重要的一句！点击播放听原曲~",
+        title: "第2阶段：主歌第一段",
+        tip: "🎧 讲述不怕失败、重新开始的故事，听听 Shakira 怎么唱~",
         cards: [
             {
-                lyrics: "I wanna try everything",
-                phonetic: "爱 wanna 踹 able thing",
-                translation: "我想要尝试一切",
-                rhythm: ["I", "wan-na", "try", "ev-ery-thing"],
-                strongBeats: [0, 2],
+                lyrics: "I messed up tonight\nI lost another fight",
+                phonetic: "爱 迈斯特 阿普 特奈特，爱 劳斯特 额那惹 fai特",
+                translation: "今晚我又搞砸了\n我又输了一场",
+                rhythm: ["I", "messed", "up", "to-night", "I", "lost", "a-no-ther", "fight"],
+                strongBeats: [1, 3, 5, 7],
                 audio: "audio/stage2_card1.mp3"
             },
             {
-                lyrics: "I wanna try",
-                phonetic: "爱 wanna 踹",
-                translation: "我想要尝试",
-                rhythm: ["I", "wan-na", "try"],
-                strongBeats: [0, 2],
+                lyrics: "I still mess up\nbut I'll just start again",
+                phonetic: "爱 斯提欧 迈斯 阿普，巴特 爱欧 家斯特 斯大特 额给嗯",
+                translation: "我还是会搞砸\n但我会重新开始",
+                rhythm: ["I", "still", "mess", "up", "but", "I'll", "just", "start", "a-gain"],
+                strongBeats: [1, 3, 7, 8],
                 audio: "audio/stage2_card2.mp3"
             },
             {
-                lyrics: "even though I could fail",
-                phonetic: "衣文 肉 爱 酷的 费欧",
-                translation: "即使我可能会失败",
-                rhythm: ["e-ven", "though", "I", "could", "fail"],
-                strongBeats: [0, 4],
+                lyrics: "I keep falling down\nI keep on hitting the ground",
+                phonetic: "爱 ki:p 否零 当，爱 ki:p 昂 嘿听 惹 歌ruang的",
+                translation: "我不断跌倒\n我不断撞到地面",
+                rhythm: ["I", "keep", "fall-ing", "down", "I", "keep", "on", "hit-ting", "the", "ground"],
+                strongBeats: [1, 3, 5, 7, 9],
                 audio: "audio/stage2_card3.mp3"
+            },
+            {
+                lyrics: "But I always get up now\nto see what's next",
+                phonetic: "巴特 爱 噢为s 盖特 阿普 闹，图 see 沃次 耐克斯特",
+                translation: "但我总是重新站起来\n去看看接下来会发生什么",
+                rhythm: ["But", "I", "al-ways", "get", "up", "now", "to", "see", "what's", "next"],
+                strongBeats: [2, 3, 5, 7, 9],
+                audio: "audio/stage2_card4.mp3"
             }
         ]
     },
     3: {
-        title: "第3阶段：主歌第一段",
-        tip: "🎧 讲述不怕失败、重新开始的故事，听听 Shakira 怎么唱~",
+        title: "第3阶段：励志桥段",
+        tip: "🎧 最有力量的部分！像小鸟一样勇敢，听原曲感受！",
         cards: [
             {
-                lyrics: "I keep falling down",
-                phonetic: "爱 ki:p 否零 当",
-                translation: "我不断跌倒",
-                rhythm: ["I", "keep", "fall-ing", "down"],
-                strongBeats: [1, 3],
+                lyrics: "Birds don't just fly\nthey fall down and get up",
+                phonetic: "伯兹 东特 家斯特 扶lai，贼 否 当 安得 盖特 阿普",
+                translation: "鸟儿不只是飞翔\n它们也会跌落再站起",
+                rhythm: ["Birds", "don't", "just", "fly", "they", "fall", "down", "and", "get", "up"],
+                strongBeats: [0, 3, 5, 8],
                 audio: "audio/stage3_card1.mp3"
             },
             {
-                lyrics: "I keep on hitting the ground",
-                phonetic: "爱 ki:p 昂 hi听 惹 歌ruang的",
-                translation: "我不断撞到地面",
-                rhythm: ["I", "keep", "on", "hit-ting", "the", "ground"],
-                strongBeats: [1, 3, 5],
+                lyrics: "Nobody learns\nwithout getting it wrong",
+                phonetic: "No八滴 乐恩斯，威烧特 盖听 伊特 rong",
+                translation: "没有人能学会\n如果不先犯错的话",
+                rhythm: ["No-bo-dy", "learns", "with-out", "get-ting", "it", "wrong"],
+                strongBeats: [0, 1, 2, 5],
                 audio: "audio/stage3_card2.mp3"
-            },
-            {
-                lyrics: "I always get up now",
-                phonetic: "爱 噢为s 盖特 阿普 闹",
-                translation: "但我总是重新站起来",
-                rhythm: ["I", "al-ways", "get", "up", "now"],
-                strongBeats: [0, 2, 4],
-                audio: "audio/stage3_card3.mp3"
-            },
-            {
-                lyrics: "to see what's next",
-                phonetic: "图 see 沃次 耐克斯特",
-                translation: "去看看接下来会发生什么",
-                rhythm: ["to", "see", "what's", "next"],
-                strongBeats: [1, 3],
-                audio: "audio/stage3_card4.mp3"
             }
         ]
     },
     4: {
-        title: "第4阶段：励志桥段",
-        tip: "🎧 最有力量的部分！像小鸟一样勇敢，听原曲感受！",
+        title: "第4阶段：副歌（核心）",
+        tip: "🎧 这是整首歌最重要的部分！跟着原曲一起唱！",
         cards: [
             {
-                lyrics: "Birds don't just fly",
-                phonetic: "伯兹 东特 家斯特 扶lai",
-                translation: "鸟儿不只是飞翔",
-                rhythm: ["Birds", "don't", "just", "fly"],
-                strongBeats: [0, 3],
+                lyrics: "I won't give up\nno I won't give in",
+                phonetic: "爱 won't 给v 阿普，no 爱 won't 给v 因",
+                translation: "我不会放弃\n不，我不会屈服",
+                rhythm: ["I", "won't", "give", "up", "no", "I", "won't", "give", "in"],
+                strongBeats: [0, 2, 4, 6, 8],
                 audio: "audio/stage4_card1.mp3"
             },
             {
-                lyrics: "they fall down and get up",
-                phonetic: "贼 否 当 安得 盖特 阿普",
-                translation: "它们也会跌落再站起",
-                rhythm: ["they", "fall", "down", "and", "get", "up"],
-                strongBeats: [1, 4],
+                lyrics: "Till I reach the end\nand then I'll start again",
+                phonetic: "踢欧 爱 瑞驰 惹 安得，安得 然 爱欧 斯大特 额给嗯",
+                translation: "直到我到达终点\n然后我会重新开始",
+                rhythm: ["Till", "I", "reach", "the", "end", "and", "then", "I'll", "start", "a-gain"],
+                strongBeats: [0, 2, 4, 8, 9],
                 audio: "audio/stage4_card2.mp3"
             },
             {
-                lyrics: "Nobody learns",
-                phonetic: "No八滴 乐恩斯",
-                translation: "没有人能学会",
-                rhythm: ["No-bo-dy", "learns"],
-                strongBeats: [0, 1],
+                lyrics: "No I won't leave\nI wanna try everything",
+                phonetic: "no 爱 won't 离v，爱 wanna 踹 able thing",
+                translation: "不，我不会离开\n我想要尝试一切",
+                rhythm: ["No", "I", "won't", "leave", "I", "wan-na", "try", "ev-ery-thing"],
+                strongBeats: [0, 2, 3, 4, 6, 7],
                 audio: "audio/stage4_card3.mp3"
             },
             {
-                lyrics: "without getting it wrong",
-                phonetic: "威烧特 盖听 伊特 rong",
-                translation: "如果不先犯错的话",
-                rhythm: ["with-out", "get-ting", "it", "wrong"],
-                strongBeats: [0, 3],
+                lyrics: "I wanna try\neven though I could fail",
+                phonetic: "爱 wanna 踹，衣文 肉 爱 酷的 费欧",
+                translation: "我想要尝试\n即使我可能会失败",
+                rhythm: ["I", "wan-na", "try", "e-ven", "though", "I", "could", "fail"],
+                strongBeats: [0, 2, 3, 7],
                 audio: "audio/stage4_card4.mp3"
             }
         ]
     },
     5: {
-        title: "第5阶段：副歌完整版",
-        tip: "🎧 把前面学的连起来，跟着原曲完整唱出副歌！",
+        title: "第5阶段：第二段主歌",
+        tip: "🎧 温暖鼓励的一段：你已经走了很远了！",
         cards: [
             {
-                lyrics: "I won't give up",
-                phonetic: "爱 won't 给v 阿普",
-                translation: "我不会放弃",
-                rhythm: ["I", "won't", "give", "up"],
-                strongBeats: [0, 2],
+                lyrics: "Look how far you've come\nyou filled your heart with love",
+                phonetic: "路克 好 发 优v 卡姆，优 fi欧得 哟 哈特 位子 拉v",
+                translation: "看看你已经走了多远\n你的心充满了爱",
+                rhythm: ["Look", "how", "far", "you've", "come", "you", "filled", "your", "heart", "with", "love"],
+                strongBeats: [0, 2, 4, 6, 8, 10],
                 audio: "audio/stage5_card1.mp3"
             },
             {
-                lyrics: "no I won't give in",
-                phonetic: "no 爱 won't 给v 因",
-                translation: "不，我不会屈服",
-                rhythm: ["no", "I", "won't", "give", "in"],
-                strongBeats: [0, 2, 4],
+                lyrics: "Baby you've done enough\ntake a deep breath",
+                phonetic: "贝比 优v 当 额那夫，忒克 额 滴p 不ruai斯",
+                translation: "宝贝你已经做得够多了\n深呼吸一下",
+                rhythm: ["Ba-by", "you've", "done", "e-nough", "take", "a", "deep", "breath"],
+                strongBeats: [0, 2, 3, 4, 6, 7],
                 audio: "audio/stage5_card2.mp3"
             },
             {
-                lyrics: "Till I reach the end",
-                phonetic: "踢欧 爱 瑞驰 惹 安得",
-                translation: "直到我到达终点",
-                rhythm: ["Till", "I", "reach", "the", "end"],
-                strongBeats: [0, 2, 4],
+                lyrics: "Don't beat yourself up\ndon't need to run so fast",
+                phonetic: "东特 比特 哟塞欧夫 阿普，东特 尼的 图 ruang 搜 发斯特",
+                translation: "别太自责了\n不需要跑那么快",
+                rhythm: ["Don't", "beat", "your-self", "up", "don't", "need", "to", "run", "so", "fast"],
+                strongBeats: [0, 1, 3, 4, 7, 9],
                 audio: "audio/stage5_card3.mp3"
             },
             {
-                lyrics: "and then I'll start again",
-                phonetic: "安得 然 爱欧 斯大特 额给嗯",
-                translation: "然后我会重新开始",
-                rhythm: ["and", "then", "I'll", "start", "a-gain"],
-                strongBeats: [1, 3, 4],
+                lyrics: "Sometimes we come last\nbut we did our best",
+                phonetic: "撒姆太姆斯 we 卡姆 拉斯特，巴特 we 滴得 奥 百斯特",
+                translation: "有时候我们会落在最后\n但我们已经尽力了",
+                rhythm: ["Some-times", "we", "come", "last", "but", "we", "did", "our", "best"],
+                strongBeats: [0, 2, 3, 4, 6, 8],
                 audio: "audio/stage5_card4.mp3"
+            }
+        ]
+    },
+    6: {
+        title: "第6阶段：高潮尾声",
+        tip: "🎧 最感人的尾声！拥抱错误，每天都在进步！",
+        cards: [
+            {
+                lyrics: "I'll keep on making\nthose new mistakes",
+                phonetic: "爱欧 ki:p 昂 美king 肉斯 纽 迷斯忒克斯",
+                translation: "我会继续犯\n那些新的错误",
+                rhythm: ["I'll", "keep", "on", "mak-ing", "those", "new", "mis-takes"],
+                strongBeats: [0, 1, 3, 5, 6],
+                audio: "audio/stage6_card1.mp3"
+            },
+            {
+                lyrics: "I'll keep on making them\nevery day",
+                phonetic: "爱欧 ki:p 昂 美king 然姆 able 瑞 dei",
+                translation: "我会每天都继续犯\n新的错误",
+                rhythm: ["I'll", "keep", "on", "mak-ing", "them", "ev-ery", "day"],
+                strongBeats: [0, 1, 3, 5, 6],
+                audio: "audio/stage6_card2.mp3"
+            },
+            {
+                lyrics: "Those new mistakes",
+                phonetic: "肉斯 纽 迷斯忒克斯",
+                translation: "那些新的错误\n（拥抱每一次尝试！）",
+                rhythm: ["Those", "new", "mis-takes"],
+                strongBeats: [0, 1, 2],
+                audio: "audio/stage6_card3.mp3"
             }
         ]
     }
@@ -439,7 +461,7 @@ function setupEventListeners() {
         // 标记当前阶段完成
         completedStages.add(currentStage);
         
-        if (currentStage < 5) {
+        if (currentStage < 6) {
             switchStage(currentStage + 1);
         } else {
             // 全部完成
@@ -501,8 +523,8 @@ function updateStageBtns() {
 
 // 更新进度条
 function updateProgress() {
-    const progress = (completedStages.size / 5) * 100;
-    progressFill.style.width = `${Math.max(progress, 20)}%`;
+    const progress = (completedStages.size / 6) * 100;
+    progressFill.style.width = `${Math.max(progress, 16)}%`;
 }
 
 // 显示随机提示
@@ -577,7 +599,7 @@ document.addEventListener('keydown', (e) => {
             if (currentStage > 1) switchStage(currentStage - 1);
             break;
         case 'ArrowRight':
-            if (currentStage < 5) {
+            if (currentStage < 6) {
                 completedStages.add(currentStage);
                 switchStage(currentStage + 1);
                 updateProgress();

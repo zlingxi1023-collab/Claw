@@ -11,7 +11,7 @@ const stagesData = {
         cards: [
             {
                 lyrics: "Oh oh oh oh oooh\nOh oh oh oh oooh",
-                phonetic: "哦 哦 哦 哦 哦~ × 2",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/ × 2",
                 translation: "（欢快的开场哼唱，连续两遍）",
                 rhythm: ["Oh", "oh", "oh", "oh", "oooh~"],
                 strongBeats: [0, 4],
@@ -19,7 +19,7 @@ const stagesData = {
             },
             {
                 lyrics: "Oh oh oh oh oooh\nOh oh oh oh oooh",
-                phonetic: "哦 哦 哦 哦 哦~ × 2",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/ × 2",
                 translation: "（再来两遍，建立节奏感）",
                 rhythm: ["Oh", "oh", "oh", "oh", "oooh~"],
                 strongBeats: [0, 4],
@@ -33,7 +33,7 @@ const stagesData = {
         cards: [
             {
                 lyrics: "I messed up tonight\nI lost another fight",
-                phonetic: "爱 迈斯特 阿普 特奈特，爱 劳斯特 额那惹 fai特",
+                phonetic: "/aɪ/ MESSED /ʌp/ to·NIGHT, /aɪ/ LOST an·OTH·er /faɪt/",
                 translation: "今晚我又搞砸了\n我又输了一场",
                 rhythm: ["I", "messed", "up", "to-night", "I", "lost", "a-no-ther", "fight"],
                 strongBeats: [1, 3, 5, 7],
@@ -41,7 +41,7 @@ const stagesData = {
             },
             {
                 lyrics: "I still mess up\nbut I'll just start again",
-                phonetic: "爱 斯提欧 迈斯 阿普，巴特 爱欧 家斯特 斯大特 额给嗯",
+                phonetic: "/aɪ/ STILL MESS /ʌp/, /bʌt/ /aɪl/ JUST START a·GAIN",
                 translation: "我还是会搞砸\n但我会重新开始",
                 rhythm: ["I", "still", "mess", "up", "but", "I'll", "just", "start", "a-gain"],
                 strongBeats: [1, 3, 7, 8],
@@ -49,7 +49,7 @@ const stagesData = {
             },
             {
                 lyrics: "I keep falling down\nI keep on hitting the ground",
-                phonetic: "爱 ki:p 否零 当，爱 ki:p 昂 嘿听 惹 歌ruang的",
+                phonetic: "/aɪ/ KEEP FALL·ing /daʊn/, /aɪ/ KEEP /ɒn/ HIT·ting the /graʊnd/",
                 translation: "我不断跌倒\n我不断撞到地面",
                 rhythm: ["I", "keep", "fall-ing", "down", "I", "keep", "on", "hit-ting", "the", "ground"],
                 strongBeats: [1, 3, 5, 7, 9],
@@ -57,7 +57,7 @@ const stagesData = {
             },
             {
                 lyrics: "But I always get up now\nto see what's next",
-                phonetic: "巴特 爱 噢为s 盖特 阿普 闹，图 see 沃次 耐克斯特",
+                phonetic: "/bʌt/ /aɪ/ AL·ways GET /ʌp/ /naʊ/, to /siː/ /wɒts/ NEXT",
                 translation: "但我总是重新站起来\n去看看接下来会发生什么",
                 rhythm: ["But", "I", "al-ways", "get", "up", "now", "to", "see", "what's", "next"],
                 strongBeats: [2, 3, 5, 7, 9],
@@ -71,7 +71,7 @@ const stagesData = {
         cards: [
             {
                 lyrics: "Birds don't just fly\nthey fall down and get up",
-                phonetic: "伯兹 东特 家斯特 扶lai，贼 否 当 安得 盖特 阿普",
+                phonetic: "/bɜːdz/ DON'T JUST /flaɪ/, /ðeɪ/ FALL /daʊn/ and GET /ʌp/",
                 translation: "鸟儿不只是飞翔\n它们也会跌落再站起",
                 rhythm: ["Birds", "don't", "just", "fly", "they", "fall", "down", "and", "get", "up"],
                 strongBeats: [0, 3, 5, 8],
@@ -79,7 +79,7 @@ const stagesData = {
             },
             {
                 lyrics: "Nobody learns\nwithout getting it wrong",
-                phonetic: "No八滴 乐恩斯，威烧特 盖听 伊特 rong",
+                phonetic: "NO·bo·dy /lɜːnz/, with·OUT GET·ting /ɪt/ /rɒŋ/",
                 translation: "没有人能学会\n如果不先犯错的话",
                 rhythm: ["No-bo-dy", "learns", "with-out", "get-ting", "it", "wrong"],
                 strongBeats: [0, 1, 2, 5],
@@ -93,7 +93,7 @@ const stagesData = {
         cards: [
             {
                 lyrics: "I won't give up\nno I won't give in",
-                phonetic: "爱 won't 给v 阿普，no 爱 won't 给v 因",
+                phonetic: "/aɪ/ WON'T GIVE /ʌp/, /noʊ/ /aɪ/ WON'T GIVE /ɪn/",
                 translation: "我不会放弃\n不，我不会屈服",
                 rhythm: ["I", "won't", "give", "up", "no", "I", "won't", "give", "in"],
                 strongBeats: [0, 2, 4, 6, 8],
@@ -101,7 +101,7 @@ const stagesData = {
             },
             {
                 lyrics: "Till I reach the end\nand then I'll start again",
-                phonetic: "踢欧 爱 瑞驰 惹 安得，安得 然 爱欧 斯大特 额给嗯",
+                phonetic: "/tɪl/ /aɪ/ REACH the END, and /ðen/ /aɪl/ START a·GAIN",
                 translation: "直到我到达终点\n然后我会重新开始",
                 rhythm: ["Till", "I", "reach", "the", "end", "and", "then", "I'll", "start", "a-gain"],
                 strongBeats: [0, 2, 4, 8, 9],
@@ -109,7 +109,7 @@ const stagesData = {
             },
             {
                 lyrics: "No I won't leave\nI wanna try everything",
-                phonetic: "no 爱 won't 离v，爱 wanna 踹 able thing",
+                phonetic: "/noʊ/ /aɪ/ WON'T /liːv/, /aɪ/ WAN·na /traɪ/ EV·ry·thing",
                 translation: "不，我不会离开\n我想要尝试一切",
                 rhythm: ["No", "I", "won't", "leave", "I", "wan-na", "try", "ev-ery-thing"],
                 strongBeats: [0, 2, 3, 4, 6, 7],
@@ -117,7 +117,7 @@ const stagesData = {
             },
             {
                 lyrics: "I wanna try\neven though I could fail",
-                phonetic: "爱 wanna 踹，衣文 肉 爱 酷的 费欧",
+                phonetic: "/aɪ/ WAN·na /traɪ/, EE·ven /ðoʊ/ /aɪ/ /kʊd/ /feɪl/",
                 translation: "我想要尝试\n即使我可能会失败",
                 rhythm: ["I", "wan-na", "try", "e-ven", "though", "I", "could", "fail"],
                 strongBeats: [0, 2, 3, 7],
@@ -131,7 +131,7 @@ const stagesData = {
         cards: [
             {
                 lyrics: "Look how far you've come\nyou filled your heart with love",
-                phonetic: "路克 好 发 优v 卡姆，优 fi欧得 哟 哈特 位子 拉v",
+                phonetic: "/lʊk/ /haʊ/ FAR /juːv/ COME, /juː/ FILLED /jɔːr/ HEART with /lʌv/",
                 translation: "看看你已经走了多远\n你的心充满了爱",
                 rhythm: ["Look", "how", "far", "you've", "come", "you", "filled", "your", "heart", "with", "love"],
                 strongBeats: [0, 2, 4, 6, 8, 10],
@@ -139,7 +139,7 @@ const stagesData = {
             },
             {
                 lyrics: "Baby you've done enough\ntake a deep breath",
-                phonetic: "贝比 优v 当 额那夫，忒克 额 滴p 不ruai斯",
+                phonetic: "BAY·bee /juːv/ DONE e·NOUGH, /teɪk/ a /diːp/ /breθ/",
                 translation: "宝贝你已经做得够多了\n深呼吸一下",
                 rhythm: ["Ba-by", "you've", "done", "e-nough", "take", "a", "deep", "breath"],
                 strongBeats: [0, 2, 3, 4, 6, 7],
@@ -147,7 +147,7 @@ const stagesData = {
             },
             {
                 lyrics: "Don't beat yourself up\ndon't need to run so fast",
-                phonetic: "东特 比特 哟塞欧夫 阿普，东特 尼的 图 ruang 搜 发斯特",
+                phonetic: "DON'T /biːt/ your·SELF /ʌp/, DON'T /niːd/ to /rʌn/ /soʊ/ FAST",
                 translation: "别太自责了\n不需要跑那么快",
                 rhythm: ["Don't", "beat", "your-self", "up", "don't", "need", "to", "run", "so", "fast"],
                 strongBeats: [0, 1, 3, 4, 7, 9],
@@ -155,7 +155,7 @@ const stagesData = {
             },
             {
                 lyrics: "Sometimes we come last\nbut we did our best",
-                phonetic: "撒姆太姆斯 we 卡姆 拉斯特，巴特 we 滴得 奥 百斯特",
+                phonetic: "SOME·times /wiː/ COME /lɑːst/, /bʌt/ /wiː/ DID /aʊr/ BEST",
                 translation: "有时候我们会落在最后\n但我们已经尽力了",
                 rhythm: ["Some-times", "we", "come", "last", "but", "we", "did", "our", "best"],
                 strongBeats: [0, 2, 3, 4, 6, 8],
@@ -169,7 +169,7 @@ const stagesData = {
         cards: [
             {
                 lyrics: "I'll keep on making\nthose new mistakes",
-                phonetic: "爱欧 ki:p 昂 美king 肉斯 纽 迷斯忒克斯",
+                phonetic: "/aɪl/ KEEP /ɒn/ MAK·ing /ðoʊz/ /njuː/ mis·TAKES",
                 translation: "我会继续犯\n那些新的错误",
                 rhythm: ["I'll", "keep", "on", "mak-ing", "those", "new", "mis-takes"],
                 strongBeats: [0, 1, 3, 5, 6],
@@ -177,7 +177,7 @@ const stagesData = {
             },
             {
                 lyrics: "I'll keep on making them\nevery day",
-                phonetic: "爱欧 ki:p 昂 美king 然姆 able 瑞 dei",
+                phonetic: "/aɪl/ KEEP /ɒn/ MAK·ing /ðem/ EV·ry /deɪ/",
                 translation: "我会每天都继续犯\n新的错误",
                 rhythm: ["I'll", "keep", "on", "mak-ing", "them", "ev-ery", "day"],
                 strongBeats: [0, 1, 3, 5, 6],
@@ -185,7 +185,7 @@ const stagesData = {
             },
             {
                 lyrics: "Those new mistakes",
-                phonetic: "肉斯 纽 迷斯忒克斯",
+                phonetic: "/ðoʊz/ /njuː/ mis·TAKES",
                 translation: "那些新的错误\n（拥抱每一次尝试！）",
                 rhythm: ["Those", "new", "mis-takes"],
                 strongBeats: [0, 1, 2],
@@ -407,7 +407,7 @@ function createCardElement(cardData, cardNum) {
             <div class="flip-card-front">
                 <span class="card-number">#${cardNum}</span>
                 <div class="card-lyrics">${cardData.lyrics}</div>
-                <div class="card-phonetic">🎤 ${cardData.phonetic}</div>
+                <div class="card-phonetic">🔤 ${cardData.phonetic}</div>
                 <div class="card-rhythm">${rhythmHtml}</div>
                 <div class="audio-player-inline">
                     <button class="audio-play-btn" data-audio="${cardData.audio}" title="播放这句">

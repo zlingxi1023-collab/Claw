@@ -748,6 +748,8 @@ body {
     min-height: 200px;
     transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     transform-style: preserve-3d;
+    -webkit-transform-style: preserve-3d;
+    will-change: transform;
 }
 
 .flip-card.flipped .flip-card-inner {
@@ -767,6 +769,12 @@ body {
     justify-content: center;
     align-items: center;
     box-shadow: 0 6px 20px var(--shadow-medium);
+    /* 修复移动端翻转复影：强制不透明 + GPU 加速 */
+    opacity: 1 !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
+    overflow: hidden;
 }
 
 .flip-card-front {
@@ -778,6 +786,9 @@ body {
     background: linear-gradient(135deg, var(--primary-teal) 0%, var(--accent-mint) 100%);
     transform: rotateY(180deg);
     color: white;
+    /* 确保背面完全不透明，防止按钮复影 */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 /* 卡片内容样式 */
@@ -849,16 +860,21 @@ body {
 
 .flip-hint {
     position: absolute;
-    bottom: 8px;
-    font-size: 0.72rem;
+    top: 8px;
+    right: 12px;
+    font-size: 0.68rem;
     color: var(--text-gray);
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 5;
 }
 
 .flip-hint::before {
     content: '👆';
+    font-size: 0.72rem;
 }
 
 /* 当前激活的卡片 */

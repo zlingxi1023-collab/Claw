@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Try Everything 歌词学习卡片 🎵</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部标题区域 -->
+        <header class="header">
+            <div class="header-characters">
+                <div class="bunny-mini"></div>
+                <h1>Try Everything</h1>
+                <div class="fox-mini"></div>
+            </div>
+            <p class="subtitle">疯狂动物城主题曲 · 分阶段学习</p>
+        </header>
+
+        <!-- 音乐播放区域 -->
+        <div class="music-player-section">
+            <div class="music-header">
+                <span class="music-icon">🎵</span>
+                <span class="music-title">边听原曲边学习</span>
+                <span class="music-artist">Shakira - Try Everything</span>
+            </div>
+            <div class="music-platforms">
+                <a href="https://y.qq.com/n/ryqq/songDetail/001X0PDp0W4lMU" target="_blank" rel="noopener" class="platform-btn qq-music">
+                    <span class="platform-icon">🎵</span>
+                    <span class="platform-name">QQ音乐</span>
+                </a>
+                <a href="https://music.163.com/#/song?id=38592976" target="_blank" rel="noopener" class="platform-btn netease">
+                    <span class="platform-icon">🎶</span>
+                    <span class="platform-name">网易云音乐</span>
+                </a>
+                <a href="https://www.kugou.com/song/#hash=7A8B6C5D4E3F2G1H" target="_blank" rel="noopener" class="platform-btn kugou">
+                    <span class="platform-icon">🎤</span>
+                    <span class="platform-name">酷狗音乐</span>
+                </a>
+                <a href="https://www.youtube.com/watch?v=c6rP-YP4c5I" target="_blank" rel="noopener" class="platform-btn youtube">
+                    <span class="platform-icon">▶️</span>
+                    <span class="platform-name">YouTube MV</span>
+                </a>
+                <a href="https://open.spotify.com/track/5gXNUojiSKM4Ij4lXgkuKY" target="_blank" rel="noopener" class="platform-btn spotify">
+                    <span class="platform-icon">🟢</span>
+                    <span class="platform-name">Spotify</span>
+                </a>
+            </div>
+            <p class="music-tip">💡 建议：打开音乐后，跟着歌曲学习卡片内容效果更好哦！</p>
+        </div>
+
+        <!-- 进度指示器 -->
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="stage-nav">
+            <button class="stage-btn active" data-stage="1">第1阶段</button>
+            <button class="stage-btn" data-stage="2">第2阶段</button>
+            <button class="stage-btn" data-stage="3">第3阶段</button>
+            <button class="stage-btn" data-stage="4">第4阶段</button>
+            <button class="stage-btn" data-stage="5">第5阶段</button>
+        </div>
+
+        <!-- 主角色装饰 -->
+        <div class="characters-container">
+            <div class="character bunny">
+                <div class="bunny-ear left"></div>
+                <div class="bunny-ear right"></div>
+                <div class="bunny-face">
+                    <div class="bunny-eye left"></div>
+                    <div class="bunny-eye right"></div>
+                    <div class="bunny-nose"></div>
+                    <div class="bunny-mouth"></div>
+                    <div class="bunny-cheek left"></div>
+                    <div class="bunny-cheek right"></div>
+                </div>
+            </div>
+
+            <!-- 卡片区域 -->
+            <div class="cards-wrapper" id="cardsWrapper">
+                <!-- 卡片将通过JS动态生成 -->
+            </div>
+
+            <div class="character fox">
+                <div class="fox-ear left"></div>
+                <div class="fox-ear right"></div>
+                <div class="fox-face">
+                    <div class="fox-eye left"></div>
+                    <div class="fox-eye right"></div>
+                    <div class="fox-nose"></div>
+                    <div class="fox-mouth"></div>
+                    <div class="fox-cheek left"></div>
+                    <div class="fox-cheek right"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button class="control-btn prev-btn" id="prevBtn">
+                <span class="btn-icon">◀</span>
+                <span>上一句</span>
+            </button>
+            <button class="control-btn flip-btn" id="flipAllBtn">
+                <span class="btn-icon">🔄</span>
+                <span>翻转卡片</span>
+            </button>
+            <button class="control-btn next-btn" id="nextBtn">
+                <span>下一句</span>
+                <span class="btn-icon">▶</span>
+            </button>
+        </div>
+
+        <!-- 学习提示 -->
+        <div class="tips-box">
+            <div class="tip-character"></div>
+            <div class="tip-content">
+                <p class="tip-title">💡 学习小贴士</p>
+                <p class="tip-text" id="tipText">点击卡片可以翻转查看中文意思哦！</p>
+            </div>
+        </div>
+
+        <!-- 底部装饰 -->
+        <footer class="footer">
+            <div class="city-skyline">
+                <div class="building b1"></div>
+                <div class="building b2"></div>
+                <div class="building b3"></div>
+                <div class="building b4"></div>
+                <div class="building b5"></div>
+            </div>
+            <p>🎬 加油！你一定能学会这首歌！🌟</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

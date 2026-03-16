@@ -1,0 +1,1118 @@
+/* ========================================
+   Try Everything 歌词学习卡片样式
+   疯狂动物城主题配色
+   ======================================== */
+
+/* CSS变量 - 疯狂动物城配色方案 */
+:root {
+    --primary-orange: #FF6B35;
+    --primary-teal: #4ECDC4;
+    --accent-mint: #95E1D3;
+    --accent-yellow: #FFE66D;
+    --bg-warm: #FFF8E7;
+    --bg-light: #FEFEFE;
+    --text-dark: #2C3E50;
+    --text-gray: #7F8C8D;
+    --bunny-gray: #8B9DC3;
+    --bunny-pink: #FFB6C1;
+    --fox-orange: #E67E22;
+    --fox-cream: #FDEBD0;
+    --shadow-soft: rgba(0, 0, 0, 0.1);
+    --shadow-medium: rgba(0, 0, 0, 0.15);
+}
+
+/* 全局重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, var(--bg-warm) 0%, #FFE4D6 50%, var(--accent-mint) 100%);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* ========================================
+   头部样式
+   ======================================== */
+.header {
+    text-align: center;
+    padding: 30px 20px;
+    position: relative;
+}
+
+.header-characters {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+
+.header h1 {
+    font-size: 2.8rem;
+    background: linear-gradient(45deg, var(--primary-orange), var(--primary-teal));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 2px 2px 4px var(--shadow-soft);
+    animation: titleBounce 2s ease-in-out infinite;
+}
+
+@keyframes titleBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.subtitle {
+    color: var(--text-gray);
+    font-size: 1.1rem;
+    margin-top: 10px;
+}
+
+/* 迷你角色头像 */
+.bunny-mini, .fox-mini {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    position: relative;
+}
+
+.bunny-mini {
+    background: linear-gradient(180deg, var(--bunny-gray) 0%, #A8B5CF 100%);
+}
+
+.bunny-mini::before {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 25px;
+    background: var(--bunny-gray);
+    border-radius: 50% 50% 0 0;
+    top: -20px;
+    left: 10px;
+}
+
+.bunny-mini::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 25px;
+    background: var(--bunny-gray);
+    border-radius: 50% 50% 0 0;
+    top: -20px;
+    right: 10px;
+}
+
+.fox-mini {
+    background: linear-gradient(180deg, var(--fox-orange) 0%, #D35400 100%);
+}
+
+.fox-mini::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 20px solid var(--fox-orange);
+    top: -15px;
+    left: 5px;
+}
+
+.fox-mini::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 20px solid var(--fox-orange);
+    top: -15px;
+    right: 5px;
+}
+
+/* ========================================
+   音乐播放区域
+   ======================================== */
+.music-player-section {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 248, 231, 0.95) 100%);
+    border-radius: 20px;
+    padding: 25px;
+    margin: 20px auto;
+    max-width: 700px;
+    box-shadow: 0 10px 30px var(--shadow-soft);
+    border: 2px solid var(--accent-yellow);
+    position: relative;
+    overflow: hidden;
+}
+
+.music-player-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255, 107, 53, 0.1) 0%, transparent 70%);
+    animation: musicGlow 3s ease-in-out infinite;
+}
+
+@keyframes musicGlow {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+.music-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+}
+
+.music-icon {
+    font-size: 2rem;
+    animation: musicBounce 1s ease-in-out infinite;
+}
+
+@keyframes musicBounce {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.1) rotate(-5deg); }
+    75% { transform: scale(1.1) rotate(5deg); }
+}
+
+.music-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.music-artist {
+    font-size: 1rem;
+    color: var(--primary-orange);
+    font-weight: 600;
+}
+
+.music-platforms {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    position: relative;
+    z-index: 1;
+}
+
+.platform-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 30px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px var(--shadow-soft);
+    position: relative;
+    overflow: hidden;
+}
+
+.platform-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+.platform-btn:hover::before {
+    left: 100%;
+}
+
+.platform-btn:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 25px var(--shadow-medium);
+}
+
+.platform-btn:active {
+    transform: translateY(0) scale(1);
+}
+
+.platform-icon {
+    font-size: 1.2rem;
+}
+
+/* QQ音乐 - 绿色 */
+.platform-btn.qq-music {
+    background: linear-gradient(135deg, #31C27C 0%, #1DB954 100%);
+    color: white;
+}
+
+.platform-btn.qq-music:hover {
+    background: linear-gradient(135deg, #28a968 0%, #1aa34a 100%);
+}
+
+/* 网易云音乐 - 红色 */
+.platform-btn.netease {
+    background: linear-gradient(135deg, #C20C0C 0%, #E60012 100%);
+    color: white;
+}
+
+.platform-btn.netease:hover {
+    background: linear-gradient(135deg, #a50a0a 0%, #c9000f 100%);
+}
+
+/* 酷狗音乐 - 蓝色 */
+.platform-btn.kugou {
+    background: linear-gradient(135deg, #2681FF 0%, #1E90FF 100%);
+    color: white;
+}
+
+.platform-btn.kugou:hover {
+    background: linear-gradient(135deg, #1f6fd9 0%, #1a7fd9 100%);
+}
+
+/* YouTube - 红色 */
+.platform-btn.youtube {
+    background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);
+    color: white;
+}
+
+.platform-btn.youtube:hover {
+    background: linear-gradient(135deg, #d90000 0%, #b30000 100%);
+}
+
+/* Spotify - 绿色 */
+.platform-btn.spotify {
+    background: linear-gradient(135deg, #1DB954 0%, #1ED760 100%);
+    color: white;
+}
+
+.platform-btn.spotify:hover {
+    background: linear-gradient(135deg, #1aa34a 0%, #1bc954 100%);
+}
+
+.music-tip {
+    text-align: center;
+    color: var(--text-gray);
+    font-size: 0.9rem;
+    margin-top: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+/* 响应式 - 音乐区域 */
+@media (max-width: 600px) {
+    .music-player-section {
+        padding: 20px 15px;
+    }
+    
+    .music-header {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .music-title {
+        font-size: 1.1rem;
+    }
+    
+    .platform-btn {
+        padding: 10px 15px;
+        font-size: 0.85rem;
+    }
+    
+    .platform-name {
+        display: none;
+    }
+    
+    .platform-icon {
+        font-size: 1.5rem;
+    }
+}
+
+/* ========================================
+   进度条和阶段导航
+   ======================================== */
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
+    margin: 20px 0;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px var(--shadow-soft);
+}
+
+.progress-fill {
+    height: 100%;
+    width: 20%;
+    background: linear-gradient(90deg, var(--primary-orange), var(--accent-yellow), var(--primary-teal));
+    border-radius: 10px;
+    transition: width 0.5s ease;
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.stage-nav {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+}
+
+.stage-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 25px;
+    background: white;
+    color: var(--text-dark);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 3px 10px var(--shadow-soft);
+}
+
+.stage-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px var(--shadow-medium);
+}
+
+.stage-btn.active {
+    background: linear-gradient(135deg, var(--primary-orange), var(--primary-teal));
+    color: white;
+}
+
+.stage-btn.completed {
+    background: var(--accent-mint);
+    color: var(--text-dark);
+}
+
+.stage-btn.completed::after {
+    content: ' ✓';
+}
+
+/* ========================================
+   角色容器和主要布局
+   ======================================== */
+.characters-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+/* ========================================
+   CSS绘制兔子 Judy
+   ======================================== */
+.character.bunny {
+    position: relative;
+    width: 120px;
+    height: 160px;
+    animation: characterBounce 3s ease-in-out infinite;
+}
+
+@keyframes characterBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.bunny-face {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(180deg, var(--bunny-gray) 0%, #9BAAC4 100%);
+    border-radius: 50% 50% 45% 45%;
+    position: absolute;
+    bottom: 0;
+    left: 10px;
+    box-shadow: 0 5px 15px var(--shadow-medium);
+}
+
+.bunny-ear {
+    position: absolute;
+    width: 25px;
+    height: 70px;
+    background: linear-gradient(180deg, var(--bunny-gray) 0%, #9BAAC4 100%);
+    border-radius: 50% 50% 30% 30%;
+    top: 0;
+}
+
+.bunny-ear.left {
+    left: 20px;
+    transform: rotate(-10deg);
+}
+
+.bunny-ear.right {
+    right: 20px;
+    transform: rotate(10deg);
+}
+
+.bunny-ear::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 50px;
+    background: var(--bunny-pink);
+    border-radius: 50%;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.bunny-eye {
+    position: absolute;
+    width: 20px;
+    height: 25px;
+    background: white;
+    border-radius: 50%;
+    top: 30px;
+    box-shadow: inset 0 0 5px var(--shadow-soft);
+}
+
+.bunny-eye.left {
+    left: 18px;
+}
+
+.bunny-eye.right {
+    right: 18px;
+}
+
+.bunny-eye::before {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 15px;
+    background: #8B4789;
+    border-radius: 50%;
+    top: 5px;
+    left: 4px;
+}
+
+.bunny-eye::after {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: white;
+    border-radius: 50%;
+    top: 7px;
+    left: 10px;
+}
+
+.bunny-nose {
+    position: absolute;
+    width: 12px;
+    height: 8px;
+    background: var(--bunny-pink);
+    border-radius: 50%;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.bunny-mouth {
+    position: absolute;
+    width: 20px;
+    height: 10px;
+    border-bottom: 3px solid #666;
+    border-radius: 0 0 50% 50%;
+    top: 63px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.bunny-cheek {
+    position: absolute;
+    width: 15px;
+    height: 10px;
+    background: rgba(255, 182, 193, 0.5);
+    border-radius: 50%;
+    top: 55px;
+}
+
+.bunny-cheek.left {
+    left: 8px;
+}
+
+.bunny-cheek.right {
+    right: 8px;
+}
+
+/* ========================================
+   CSS绘制狐狸 Nick
+   ======================================== */
+.character.fox {
+    position: relative;
+    width: 120px;
+    height: 160px;
+    animation: characterBounce 3s ease-in-out infinite;
+    animation-delay: 0.5s;
+}
+
+.fox-face {
+    width: 100px;
+    height: 95px;
+    background: linear-gradient(180deg, var(--fox-orange) 0%, #D35400 100%);
+    border-radius: 50% 50% 40% 40%;
+    position: absolute;
+    bottom: 0;
+    left: 10px;
+    box-shadow: 0 5px 15px var(--shadow-medium);
+}
+
+.fox-face::before {
+    content: '';
+    position: absolute;
+    width: 60px;
+    height: 50px;
+    background: var(--fox-cream);
+    border-radius: 50% 50% 45% 45%;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.fox-ear {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-bottom: 45px solid var(--fox-orange);
+    top: 20px;
+}
+
+.fox-ear.left {
+    left: 10px;
+    transform: rotate(-15deg);
+}
+
+.fox-ear.right {
+    right: 10px;
+    transform: rotate(15deg);
+}
+
+.fox-ear::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 25px solid #2C3E50;
+    top: 20px;
+    left: -10px;
+}
+
+.fox-eye {
+    position: absolute;
+    width: 18px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    top: 25px;
+    z-index: 2;
+}
+
+.fox-eye.left {
+    left: 18px;
+}
+
+.fox-eye.right {
+    right: 18px;
+}
+
+.fox-eye::before {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 12px;
+    background: #27AE60;
+    border-radius: 50%;
+    top: 4px;
+    left: 4px;
+}
+
+.fox-eye::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: white;
+    border-radius: 50%;
+    top: 6px;
+    left: 8px;
+}
+
+.fox-nose {
+    position: absolute;
+    width: 15px;
+    height: 12px;
+    background: #2C3E50;
+    border-radius: 50% 50% 40% 40%;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.fox-mouth {
+    position: absolute;
+    width: 30px;
+    height: 8px;
+    border-bottom: 2px solid #666;
+    top: 62px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.fox-mouth::before {
+    content: '';
+    position: absolute;
+    width: 2px;
+    height: 8px;
+    background: #666;
+    left: 50%;
+    transform: translateX(-50%);
+    top: -8px;
+}
+
+.fox-cheek {
+    position: absolute;
+    width: 12px;
+    height: 8px;
+    background: rgba(255, 165, 0, 0.4);
+    border-radius: 50%;
+    top: 50px;
+    z-index: 2;
+}
+
+.fox-cheek.left {
+    left: 10px;
+}
+
+.fox-cheek.right {
+    right: 10px;
+}
+
+/* ========================================
+   翻转卡片样式
+   ======================================== */
+.cards-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+    perspective: 1000px;
+    min-width: 350px;
+    max-width: 500px;
+}
+
+.flip-card {
+    width: 100%;
+    height: 180px;
+    perspective: 1000px;
+    cursor: pointer;
+}
+
+.flip-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+}
+
+.flip-card.flipped .flip-card-inner {
+    transform: rotateY(180deg);
+}
+
+.flip-card-front, .flip-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 10px 30px var(--shadow-medium);
+}
+
+.flip-card-front {
+    background: linear-gradient(135deg, #FFFFFF 0%, #F8F9FA 100%);
+    border: 3px solid var(--primary-orange);
+}
+
+.flip-card-back {
+    background: linear-gradient(135deg, var(--primary-teal) 0%, var(--accent-mint) 100%);
+    transform: rotateY(180deg);
+    color: white;
+}
+
+/* 卡片内容样式 */
+.card-number {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    font-size: 0.85rem;
+    color: var(--text-gray);
+    font-weight: 600;
+}
+
+.card-lyrics {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    text-align: center;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.card-phonetic {
+    font-size: 1rem;
+    color: var(--primary-orange);
+    font-style: italic;
+    margin-bottom: 5px;
+}
+
+.card-rhythm {
+    font-size: 0.9rem;
+    color: var(--text-gray);
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.rhythm-beat {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--accent-yellow);
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.rhythm-beat.strong {
+    background: var(--primary-orange);
+    color: white;
+}
+
+.card-translation {
+    font-size: 1.3rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.card-tip {
+    font-size: 0.9rem;
+    margin-top: 10px;
+    opacity: 0.9;
+}
+
+.flip-hint {
+    position: absolute;
+    bottom: 10px;
+    font-size: 0.8rem;
+    color: var(--text-gray);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.flip-hint::before {
+    content: '👆';
+}
+
+/* 当前激活的卡片 */
+.flip-card.active {
+    transform: scale(1.02);
+}
+
+.flip-card.active .flip-card-front {
+    border-color: var(--primary-teal);
+    box-shadow: 0 15px 40px rgba(78, 205, 196, 0.3);
+}
+
+/* ========================================
+   控制按钮
+   ======================================== */
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 30px 0;
+    flex-wrap: wrap;
+}
+
+.control-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 25px;
+    border: none;
+    border-radius: 30px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 15px var(--shadow-soft);
+}
+
+.control-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px var(--shadow-medium);
+}
+
+.control-btn:active {
+    transform: translateY(0);
+}
+
+.prev-btn, .next-btn {
+    background: white;
+    color: var(--text-dark);
+}
+
+.prev-btn:hover {
+    background: var(--accent-mint);
+}
+
+.next-btn:hover {
+    background: var(--accent-yellow);
+}
+
+.flip-btn {
+    background: linear-gradient(135deg, var(--primary-orange), var(--primary-teal));
+    color: white;
+}
+
+.btn-icon {
+    font-size: 1.1rem;
+}
+
+/* ========================================
+   学习提示框
+   ======================================== */
+.tips-box {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: white;
+    padding: 20px;
+    border-radius: 20px;
+    margin: 20px auto;
+    max-width: 500px;
+    box-shadow: 0 5px 20px var(--shadow-soft);
+    border-left: 5px solid var(--accent-yellow);
+}
+
+.tip-character {
+    width: 50px;
+    height: 50px;
+    background: var(--accent-yellow);
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.tip-character::before {
+    content: '💡';
+    position: absolute;
+    font-size: 1.5rem;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.tip-title {
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 5px;
+}
+
+.tip-text {
+    color: var(--text-gray);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* ========================================
+   底部城市天际线
+   ======================================== */
+.footer {
+    text-align: center;
+    margin-top: 40px;
+    padding: 20px;
+}
+
+.city-skyline {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 8px;
+    margin-bottom: 20px;
+    height: 80px;
+}
+
+.building {
+    background: linear-gradient(180deg, var(--primary-teal), #3498DB);
+    border-radius: 5px 5px 0 0;
+    opacity: 0.6;
+}
+
+.building.b1 { width: 30px; height: 50px; }
+.building.b2 { width: 25px; height: 70px; }
+.building.b3 { width: 40px; height: 80px; }
+.building.b4 { width: 25px; height: 55px; }
+.building.b5 { width: 35px; height: 65px; }
+
+.building::before {
+    content: '';
+    display: block;
+    width: 60%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.5);
+    margin: 10px auto;
+}
+
+.footer p {
+    color: var(--text-gray);
+    font-size: 1rem;
+}
+
+/* ========================================
+   响应式设计
+   ======================================== */
+@media (max-width: 768px) {
+    .header h1 {
+        font-size: 2rem;
+    }
+
+    .characters-container {
+        flex-direction: column;
+    }
+
+    .character.bunny, .character.fox {
+        transform: scale(0.8);
+    }
+
+    .cards-wrapper {
+        min-width: 100%;
+        padding: 0 10px;
+    }
+
+    .flip-card {
+        height: 160px;
+    }
+
+    .card-lyrics {
+        font-size: 1.2rem;
+    }
+
+    .stage-btn {
+        padding: 8px 15px;
+        font-size: 0.85rem;
+    }
+
+    .control-btn {
+        padding: 10px 18px;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-characters {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .bunny-mini, .fox-mini {
+        display: none;
+    }
+
+    .header h1 {
+        font-size: 1.8rem;
+    }
+
+    .stage-nav {
+        gap: 5px;
+    }
+
+    .stage-btn {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+}
+
+/* ========================================
+   动画效果
+   ======================================== */
+@keyframes cardAppear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.flip-card {
+    animation: cardAppear 0.5s ease forwards;
+}
+
+.flip-card:nth-child(1) { animation-delay: 0.1s; }
+.flip-card:nth-child(2) { animation-delay: 0.2s; }
+.flip-card:nth-child(3) { animation-delay: 0.3s; }
+
+/* 星星装饰动画 */
+@keyframes twinkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* 成功完成动画 */
+@keyframes celebrate {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.1) rotate(-5deg); }
+    50% { transform: scale(1.1) rotate(5deg); }
+    75% { transform: scale(1.1) rotate(-5deg); }
+    100% { transform: scale(1); }
+}
+
+.flip-card.completed {
+    animation: celebrate 0.5s ease;
+}
+
+.flip-card.completed .flip-card-front {
+    border-color: var(--accent-mint);
+    background: linear-gradient(135deg, #E8F8F5 0%, #D5F5E3 100%);
+}

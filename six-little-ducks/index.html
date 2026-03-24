@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🦆 Six Little Ducks - 合唱表演</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
+</head>
+<body>
+  <!-- 加载动画 -->
+  <div class="loading-overlay" id="loading">
+    <div class="loading-ducks">
+      <div class="loading-duck" style="--duck-color: #FF6B6B; --delay: 0s">🦆</div>
+      <div class="loading-duck" style="--duck-color: #4ECDC4; --delay: 0.1s">🦆</div>
+      <div class="loading-duck" style="--duck-color: #45B7D1; --delay: 0.2s">🦆</div>
+      <div class="loading-duck" style="--duck-color: #96CEB4; --delay: 0.3s">🦆</div>
+      <div class="loading-duck" style="--duck-color: #FFEAA7; --delay: 0.4s">🦆</div>
+      <div class="loading-duck" style="--duck-color: #DDA0DD; --delay: 0.5s">🦆</div>
+    </div>
+    <div class="loading-text">Loading...</div>
+  </div>
+
+  <!-- ========== 模式选择界面 ========== -->
+  <div id="mode-selector">
+    <!-- 背景装饰 -->
+    <div class="bg-bubbles" id="selector-bubbles"></div>
+    
+    <div class="title-area">
+      <div class="title-ducks-container" id="title-ducks">
+        <!-- JS动态生成6只SVG鸭子 -->
+      </div>
+      <h1 class="main-title">Six Little Ducks</h1>
+      <p class="subtitle">🎵 6人合唱互动播放器 🎵</p>
+    </div>
+
+    <div class="mode-cards">
+      <div class="mode-card performance" id="btn-performance">
+        <div class="card-glow"></div>
+        <div class="card-icon">🎭</div>
+        <h2>表演模式</h2>
+        <p>舞台大屏展示<br>播放伴奏，现场演唱<br>大字歌词 + 全屏效果</p>
+        <div class="card-arrow">→</div>
+      </div>
+      <div class="mode-card practice" id="btn-practice">
+        <div class="card-glow"></div>
+        <div class="card-icon">📖</div>
+        <h2>练习模式</h2>
+        <p>日常跟唱练习<br>播放带唱视频，跟着学<br>角色高亮 + 歌词同步</p>
+        <div class="card-arrow">→</div>
+      </div>
+    </div>
+
+    <div class="role-selector">
+      <h3>选择你的角色</h3>
+      <div class="role-buttons" id="role-buttons">
+        <!-- JS 动态生成SVG鸭子角色按钮 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 表演模式 ========== -->
+  <div id="performance-mode">
+    <!-- 工具栏 -->
+    <div class="perf-toolbar">
+      <button class="toolbar-btn" id="perf-back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <span class="toolbar-title">🎭 Six Little Ducks - 表演</span>
+      <div class="toolbar-role-picker" id="perf-toolbar-role-picker">
+        <!-- JS动态生成小号角色圆点 -->
+      </div>
+      <!-- 视图切换标签 -->
+      <div class="toolbar-view-tabs">
+        <button class="view-tab active" id="perf-tab-lyrics" data-view="lyrics">📝 歌词</button>
+        <button class="view-tab" id="perf-tab-choreo" data-view="choreo">💃 编排</button>
+      </div>
+      <button class="toolbar-btn toolbar-switch" id="perf-switch-mode">练习模式 →</button>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="perf-main-content">
+      <!-- 视频区 -->
+      <div class="video-panel perf-video-panel">
+        <video id="perf-video" preload="auto" muted playsinline>
+          <source src="media/six-little-ducks-video-muted.mp4" type="video/mp4">
+        </video>
+        <div class="video-controls">
+          <div class="progress-bar-container" id="perf-progress-bar">
+            <div class="progress-bar-fill" id="perf-progress-fill"></div>
+            <div class="progress-bar-thumb" id="perf-progress-thumb"></div>
+          </div>
+          <div class="control-row">
+            <span class="time-display" id="perf-time">0:00 / 0:00</span>
+            <button class="ctrl-btn play-btn" id="perf-play-btn" title="播放/暂停">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="icon-play"><path d="M8 5v14l11-7z"/></svg>
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="icon-pause" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <button class="ctrl-btn" id="perf-restart-btn" title="重新开始">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+            </button>
+            <button class="ctrl-btn" id="perf-fullscreen-btn" title="全屏">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- 视频下方的鸭子动画 -->
+        <div class="prac-duck-strip" id="perf-duck-stage">
+          <!-- JS动态生成6只SVG鸭子 -->
+        </div>
+      </div>
+
+      <!-- 右侧面板容器 -->
+      <div class="right-panel-container">
+        <!-- 歌词面板（默认显示） -->
+        <div class="lyrics-panel" id="perf-lyrics-panel-view">
+          <div class="lyrics-panel-header">
+            <span>📝 歌词</span>
+            <span class="lyrics-section-tag" id="perf-section">Ready</span>
+          </div>
+          <div class="lyrics-scroll-container" id="perf-lyrics-area">
+            <!-- JS 动态渲染歌词行 -->
+          </div>
+        </div>
+
+        <!-- 动作编排面板（切换显示） -->
+        <div class="choreo-panel" id="perf-choreo-panel-view" style="display:none">
+          <div class="choreo-panel-header">
+            <span>💃 动作编排</span>
+            <span class="choreo-section-tag" id="perf-choreo-section-tag">Ready</span>
+          </div>
+          
+          <!-- 当前动作提示 -->
+          <div class="current-action-card" id="perf-current-action-card">
+            <div class="action-label">当前动作</div>
+            <div class="action-text" id="perf-action-text">等待播放...</div>
+          </div>
+
+          <!-- 队形可视化 -->
+          <div class="formation-area">
+            <div class="formation-header">
+              <span class="formation-title" id="perf-formation-title">队形图</span>
+              <span class="formation-desc" id="perf-formation-desc">初始队形</span>
+            </div>
+            <div class="formation-stage" id="perf-formation-stage">
+              <!-- JS动态绘制SVG队形图 -->
+              <div class="stage-label stage-label-front">前台 (观众)</div>
+              <div class="stage-label stage-label-back">后台</div>
+            </div>
+          </div>
+
+          <!-- 动作时间轴列表 -->
+          <div class="action-timeline" id="perf-action-timeline">
+            <!-- JS 动态渲染动作列表 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 隐藏的音频播放器 - demucs从视频提取的纯伴奏 -->
+    <audio id="perf-audio" preload="auto">
+      <source src="media/six-little-ducks-instrumental-extracted.mp3" type="audio/mpeg">
+    </audio>
+  </div>
+
+  <!-- ========== 练习模式 ========== -->
+  <div id="practice-mode">
+    <!-- 工具栏 -->
+    <div class="practice-toolbar">
+      <button class="toolbar-btn" id="prac-back-btn" title="返回">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <span class="toolbar-title">🦆 Six Little Ducks - 练习</span>
+      <div class="toolbar-role-picker" id="toolbar-role-picker">
+        <!-- JS动态生成小号角色圆点 -->
+      </div>
+      <button class="toolbar-btn toolbar-switch" id="prac-switch-mode">表演模式 →</button>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="practice-content">
+      <!-- 视频区 -->
+      <div class="video-panel">
+        <video id="prac-video" preload="auto">
+          <source src="media/six-little-ducks-video.mp4" type="video/mp4">
+        </video>
+        <div class="video-controls">
+          <div class="progress-bar-container" id="prac-progress-bar">
+            <div class="progress-bar-fill" id="prac-progress-fill"></div>
+            <div class="progress-bar-thumb" id="prac-progress-thumb"></div>
+            <!-- AB段循环标记 -->
+            <div class="ab-loop-range" id="ab-loop-range"></div>
+          </div>
+          <div class="control-row">
+            <span class="time-display" id="prac-time">0:00 / 0:00</span>
+            <button class="ctrl-btn" id="prac-set-a-btn" title="设置 A 点">
+              <span style="font-size:11px;font-weight:700">A</span>
+            </button>
+            <button class="ctrl-btn play-btn" id="prac-play-btn" title="播放/暂停">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="icon-play"><path d="M8 5v14l11-7z"/></svg>
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="icon-pause" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <button class="ctrl-btn" id="prac-set-b-btn" title="设置 B 点">
+              <span style="font-size:11px;font-weight:700">B</span>
+            </button>
+            <button class="ctrl-btn" id="prac-clear-ab-btn" title="清除AB循环" style="display:none">
+              <span style="font-size:10px;font-weight:700">✕AB</span>
+            </button>
+            <button class="ctrl-btn" id="prac-restart-btn" title="重新开始">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- 视频下方的鸭子动画 -->
+        <div class="prac-duck-strip" id="prac-duck-strip">
+          <!-- JS动态生成 -->
+        </div>
+      </div>
+
+      <!-- 右侧面板容器 -->
+      <div class="right-panel-container">
+        <!-- 上部：编排区域 -->
+        <div class="choreo-section" id="choreo-panel-view">
+          <div class="choreo-panel-header">
+            <span>💃 动作编排</span>
+            <span class="choreo-section-tag" id="choreo-section-tag">Ready</span>
+          </div>
+
+          <!-- 队形可视化 -->
+          <div class="formation-area">
+            <div class="formation-header">
+              <span class="formation-title" id="formation-title">队形图</span>
+              <span class="formation-desc" id="formation-desc">初始队形</span>
+            </div>
+            <div class="formation-stage" id="formation-stage">
+              <!-- JS动态绘制SVG队形图 -->
+              <div class="stage-label stage-label-front">前台 (观众)</div>
+              <div class="stage-label stage-label-back">后台</div>
+            </div>
+          </div>
+
+          <!-- 当前动作提示（队形图下方） -->
+          <div class="current-action-card" id="current-action-card">
+            <div class="action-label">当前动作</div>
+            <div class="action-text" id="current-action-text">等待播放...</div>
+          </div>
+        </div>
+
+        <!-- 分隔线 -->
+        <div class="panel-divider"></div>
+
+        <!-- 下部：歌词区域 -->
+        <div class="lyrics-section" id="lyrics-panel-view">
+          <div class="lyrics-panel-header">
+            <span>📝 歌词</span>
+            <span class="lyrics-section-tag" id="prac-section-tag">Ready</span>
+          </div>
+          <div class="lyrics-scroll-container" id="prac-lyrics-container">
+            <!-- JS 动态渲染 -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS -->
+  <script src="js/lyrics-data.js"></script>
+  <script src="js/lyric-engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

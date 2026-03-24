@@ -1,0 +1,757 @@
+/* ============================================
+   Six Little Ducks - 合唱页面样式系统
+   更丰富的动画 + SVG鸭子角色 + 舞台灯光效果
+   ============================================ */
+
+/* --- Google Fonts --- */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap');
+
+/* --- CSS 变量 --- */
+:root {
+  --bg-primary: #0a0a1a;
+  --bg-secondary: #12122a;
+  --bg-card: rgba(255, 255, 255, 0.06);
+  --bg-card-hover: rgba(255, 255, 255, 0.12);
+
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.35);
+
+  --duck1: #FF6B6B;
+  --duck2: #4ECDC4;
+  --duck3: #45B7D1;
+  --duck4: #96CEB4;
+  --duck5: #FFEAA7;
+  --duck6: #DDA0DD;
+  --all-ducks: linear-gradient(90deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7, #DDA0DD);
+
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- 基础重置 --- */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: 'Poppins', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================
+   加载动画
+   ============================================ */
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg-primary);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.6s ease;
+}
+.loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.loading-ducks { display: flex; gap: 12px; margin-bottom: 20px; }
+.loading-duck {
+  font-size: 2.5rem;
+  animation: loadBounce 1.2s ease-in-out infinite;
+  animation-delay: var(--delay);
+  filter: drop-shadow(0 0 8px var(--duck-color));
+}
+.loading-text {
+  font-size: 1rem; color: var(--text-muted);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes loadBounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-25px) scale(1.1); }
+}
+@keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* ============================================
+   模式选择界面
+   ============================================ */
+#mode-selector {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100vh; padding: 2rem;
+  background: radial-gradient(ellipse at 50% 30%, #1a1a3e 0%, #0a0a1a 70%);
+  position: relative; overflow: hidden;
+}
+
+/* 背景气泡装饰 */
+.bg-bubbles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.bubble {
+  position: absolute; border-radius: 50%;
+  opacity: 0.15; animation: floatBubble var(--duration) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+@keyframes floatBubble {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(var(--float-y, -30px)) scale(1.1); }
+}
+
+/* 标题区 */
+.title-area { text-align: center; margin-bottom: 2.5rem; z-index: 1; position: relative; }
+
+.title-ducks-container {
+  display: flex; gap: 8px; justify-content: center;
+  margin-bottom: 16px; perspective: 800px;
+}
+.title-duck-wrapper {
+  animation: duckParade 3s ease-in-out infinite;
+  transition: transform 0.3s;
+  cursor: default;
+}
+.title-duck-wrapper:hover { transform: scale(1.2) rotate(10deg); }
+.title-duck-wrapper:nth-child(1) { animation-delay: 0s; }
+.title-duck-wrapper:nth-child(2) { animation-delay: 0.2s; }
+.title-duck-wrapper:nth-child(3) { animation-delay: 0.4s; }
+.title-duck-wrapper:nth-child(4) { animation-delay: 0.6s; }
+.title-duck-wrapper:nth-child(5) { animation-delay: 0.8s; }
+.title-duck-wrapper:nth-child(6) { animation-delay: 1.0s; }
+
+@keyframes duckParade {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(-5deg); }
+  75% { transform: translateY(-8px) rotate(5deg); }
+}
+
+.main-title {
+  font-size: 3.8rem; font-weight: 900;
+  background: var(--all-ducks); background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 4s ease-in-out infinite;
+  letter-spacing: -0.02em;
+}
+@keyframes gradientShift {
+  0% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+
+.subtitle {
+  font-size: 1.1rem; color: var(--text-secondary);
+  letter-spacing: 0.15em; margin-top: 6px;
+}
+
+/* 模式卡片 */
+.mode-cards { display: flex; gap: 24px; margin-bottom: 2.5rem; z-index: 1; }
+
+.mode-card {
+  width: 300px; padding: 32px 28px;
+  border-radius: 24px; background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer; text-align: center;
+  transition: all var(--transition-normal);
+  position: relative; overflow: hidden;
+}
+.mode-card .card-glow {
+  position: absolute; inset: 0; border-radius: 24px;
+  opacity: 0; transition: opacity 0.4s;
+}
+.mode-card.performance .card-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(255,107,107,0.15), transparent 70%);
+}
+.mode-card.practice .card-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(78,205,196,0.15), transparent 70%);
+}
+.mode-card:hover .card-glow { opacity: 1; }
+.mode-card:hover {
+  transform: translateY(-10px) scale(1.02);
+  border-color: rgba(255,255,255,0.2);
+  box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+}
+
+.card-icon { font-size: 3.5rem; margin-bottom: 12px; }
+.mode-card h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; }
+.mode-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; }
+.card-arrow {
+  position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+  font-size: 1.5rem; color: rgba(255,255,255,0.15);
+  transition: all 0.3s;
+}
+.mode-card:hover .card-arrow { color: rgba(255,255,255,0.5); right: 14px; }
+
+/* 角色选择区 */
+.role-selector { text-align: center; z-index: 1; }
+.role-selector h3 {
+  font-size: 1rem; color: var(--text-secondary);
+  margin-bottom: 16px; font-weight: 600;
+}
+
+.role-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+.role-btn {
+  width: 80px; height: 96px; border-radius: 16px;
+  border: 2px solid transparent;
+  background: var(--bg-card);
+  cursor: pointer;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px;
+  transition: all var(--transition-normal);
+  position: relative; overflow: hidden;
+  padding: 8px 4px;
+}
+.role-btn .duck-avatar { transition: transform 0.3s; }
+.role-btn .role-label {
+  font-size: 0.65rem; font-weight: 600;
+  color: var(--text-muted);
+  transition: color 0.3s;
+}
+.role-btn:hover {
+  transform: translateY(-5px);
+  background: rgba(255,255,255,0.1);
+}
+.role-btn:hover .duck-avatar { transform: scale(1.15) rotate(5deg); }
+.role-btn.active {
+  border-color: var(--btn-color);
+  box-shadow: 0 0 25px color-mix(in srgb, var(--btn-color) 40%, transparent);
+  background: color-mix(in srgb, var(--btn-color) 10%, transparent);
+}
+.role-btn.active .role-label { color: var(--btn-color); }
+.role-btn.active .duck-avatar { animation: selectedDuckBounce 0.8s ease-in-out infinite; }
+@keyframes selectedDuckBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ============================================
+   表演模式（与练习模式同布局）
+   ============================================ */
+#performance-mode {
+  display: none; width: 100vw; height: 100vh;
+  background: var(--bg-primary);
+}
+#performance-mode.active { display: flex; flex-direction: column; }
+
+/* 表演模式工具栏 - 复用练习模式样式 */
+.perf-toolbar {
+  display: flex; align-items: center;
+  padding: 10px 18px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  gap: 12px; flex-shrink: 0;
+}
+.perf-toolbar .toolbar-title { font-size: 1rem; font-weight: 700; flex: 1; }
+
+/* 表演模式主内容 - 复用练习模式flex布局 */
+.perf-main-content { display: flex; flex: 1; overflow: hidden; }
+
+/* 表演模式视频面板使用紫色边框区分 */
+.perf-video-panel {
+  border-right: 2px solid rgba(255,107,107,0.15);
+}
+@keyframes noteFloat {
+  0% { transform: translateY(0) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-20px) scale(0.5); opacity: 0; }
+}
+
+/* 进度条 */
+.progress-bar-container {
+  width: 100%; height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px; cursor: pointer;
+  position: relative; margin-bottom: 12px;
+  transition: height 0.2s;
+}
+.progress-bar-container:hover { height: 10px; }
+.progress-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--all-ducks); background-size: 300% 100%;
+  animation: progressGlow 4s linear infinite;
+  transition: width 0.1s linear; width: 0%;
+}
+.progress-bar-thumb {
+  position: absolute; top: 50%; right: 0;
+  width: 14px; height: 14px;
+  background: white; border-radius: 50%;
+  transform: translate(50%, -50%) scale(0);
+  transition: transform 0.2s;
+  box-shadow: 0 0 10px rgba(255,255,255,0.4);
+}
+.progress-bar-container:hover .progress-bar-thumb { transform: translate(50%, -50%) scale(1); }
+@keyframes progressGlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+/* 控制按钮 */
+.control-buttons {
+  display: flex; justify-content: center;
+  align-items: center; gap: 16px;
+}
+.ctrl-btn {
+  background: rgba(255,255,255,0.08); border: none;
+  color: white; width: 44px; height: 44px;
+  border-radius: 50%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+}
+.ctrl-btn:hover {
+  background: rgba(255,255,255,0.18);
+  transform: scale(1.1);
+}
+.ctrl-btn.play-btn {
+  width: 60px; height: 60px;
+  background: rgba(255,255,255,0.12);
+  box-shadow: 0 0 20px rgba(255,255,255,0.05);
+}
+.ctrl-btn.play-btn:hover { box-shadow: 0 0 30px rgba(255,255,255,0.1); }
+
+.time-display {
+  font-size: 0.85rem; color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 100px; text-align: center;
+}
+
+/* ============================================
+   练习模式
+   ============================================ */
+#practice-mode {
+  display: none; width: 100vw; height: 100vh;
+  background: var(--bg-primary);
+}
+#practice-mode.active { display: flex; flex-direction: column; }
+
+/* 工具栏 */
+.practice-toolbar {
+  display: flex; align-items: center;
+  padding: 10px 18px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  gap: 12px; flex-shrink: 0;
+}
+.toolbar-btn {
+  background: rgba(255,255,255,0.06); border: none;
+  color: var(--text-secondary); cursor: pointer;
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+}
+.toolbar-btn:hover { background: rgba(255,255,255,0.12); color: white; }
+.toolbar-title { font-size: 1rem; font-weight: 700; flex: 1; }
+
+.toolbar-role-picker {
+  display: flex; gap: 6px; align-items: center;
+}
+.toolbar-role-dot {
+  width: 24px; height: 24px; border-radius: 50%;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; border: 2px solid transparent;
+  opacity: 0.5;
+}
+.toolbar-role-dot:hover { opacity: 0.8; transform: scale(1.15); }
+.toolbar-role-dot.active {
+  opacity: 1; border-color: currentColor;
+  box-shadow: 0 0 12px currentColor;
+  transform: scale(1.15);
+}
+
+.toolbar-switch {
+  width: auto; padding: 0 14px;
+  font-size: 0.8rem; font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 练习主内容 */
+.practice-content { display: flex; flex: 1; overflow: hidden; }
+
+/* 视频区 */
+.video-panel {
+  width: 60%; display: flex; flex-direction: column;
+  background: #000; position: relative;
+}
+.video-panel video {
+  width: 100%; flex: 1;
+  object-fit: contain; background: #000;
+}
+.video-controls {
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.video-controls .progress-bar-container { margin-bottom: 0; }
+.video-controls .control-row {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+}
+.video-controls .ctrl-btn { width: 38px; height: 38px; }
+.video-controls .ctrl-btn.play-btn { width: 48px; height: 48px; }
+
+/* 练习模式鸭子条 */
+.prac-duck-strip {
+  display: flex; justify-content: center; gap: 12px;
+  padding: 8px 16px;
+  background: rgba(18,18,42,0.9);
+  height: 52px; align-items: center;
+}
+.prac-duck-mini {
+  opacity: 0.3; transition: all 0.35s;
+  position: relative;
+}
+.prac-duck-mini.singing {
+  opacity: 1;
+  animation: miniDuckBounce 0.4s ease-in-out infinite alternate;
+}
+.prac-duck-mini.singing::before {
+  content: '♪'; position: absolute; top: -8px; right: -4px;
+  font-size: 10px; color: var(--mini-color);
+  animation: noteFloat 0.8s ease infinite;
+}
+@keyframes miniDuckBounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-5px); }
+}
+
+/* 右侧面板（上下分区：编排+歌词） */
+.right-panel-container {
+  width: 40%; display: flex; flex-direction: column;
+  background: var(--bg-secondary);
+  border-left: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+/* 上部：编排区域（固定高度，不可滚动） */
+.choreo-section {
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  max-height: 45%;
+  overflow-y: auto;
+}
+.choreo-section::-webkit-scrollbar { width: 3px; }
+.choreo-section::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1); border-radius: 2px;
+}
+
+/* 分隔线 */
+.panel-divider {
+  height: 1px; flex-shrink: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+  margin: 0 16px;
+}
+
+/* 下部：歌词区域（flex:1 填充剩余空间） */
+.lyrics-section {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; min-height: 0;
+}
+.lyrics-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-weight: 700; font-size: 0.95rem;
+  color: var(--text-secondary);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.lyrics-section-tag {
+  font-size: 0.75rem; padding: 2px 10px;
+  border-radius: 10px; background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+}
+
+.lyrics-scroll-container {
+  flex: 1; overflow-y: auto; padding: 20px 16px;
+  scroll-behavior: smooth;
+}
+.lyrics-scroll-container::-webkit-scrollbar { width: 4px; }
+.lyrics-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15); border-radius: 2px;
+}
+
+/* 练习模式歌词行 */
+.practice-lyric-line {
+  display: flex; align-items: center;
+  padding: 10px 12px; margin-bottom: 4px;
+  border-radius: 12px;
+  transition: all var(--transition-normal);
+  cursor: pointer; position: relative;
+  border: 1px solid transparent;
+}
+.practice-lyric-line:hover { background: rgba(255,255,255,0.04); }
+
+.lyric-role-indicator {
+  width: 28px; height: 28px; border-radius: 8px;
+  margin-right: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; transition: all var(--transition-normal);
+  background: rgba(255,255,255,0.04);
+}
+.lyric-text {
+  font-size: 1rem; line-height: 1.6;
+  color: var(--text-secondary);
+  transition: all var(--transition-normal);
+  flex: 1;
+}
+.singer-tags {
+  display: flex; gap: 4px; margin-left: 8px; flex-shrink: 0;
+}
+.singer-tag {
+  font-size: 0.6rem; padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted); white-space: nowrap;
+  font-weight: 600;
+}
+
+/* 歌词行状态 */
+.practice-lyric-line.active {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.08);
+  transform: scale(1.01);
+}
+.practice-lyric-line.active .lyric-text {
+  color: var(--text-primary); font-weight: 700; font-size: 1.1rem;
+}
+.practice-lyric-line.active .lyric-role-indicator {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px var(--indicator-color, rgba(255,255,255,0.1));
+}
+.practice-lyric-line.past .lyric-text { color: var(--text-muted); }
+.practice-lyric-line.past .lyric-role-indicator { opacity: 0.4; }
+
+/* 我的角色 */
+.practice-lyric-line.my-role {
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+}
+.practice-lyric-line.my-role .lyric-text { font-weight: 600; }
+.practice-lyric-line.my-role.active {
+  border-color: var(--my-role-color, rgba(255,255,255,0.3));
+  box-shadow: 0 0 20px color-mix(in srgb, var(--my-role-color, white) 15%, transparent);
+}
+
+/* ============================================
+   动作编排区域
+   ============================================ */
+.choreo-panel-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-weight: 700; font-size: 0.85rem;
+  color: var(--text-secondary);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.choreo-section-tag {
+  font-size: 0.75rem; padding: 2px 10px;
+  border-radius: 10px; background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+}
+
+/* 当前动作卡片 */
+.current-action-card {
+  margin: 8px 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(78,205,196,0.1) 0%, rgba(69,183,209,0.1) 100%);
+  border: 1px solid rgba(78,205,196,0.2);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: all 0.4s ease;
+}
+.current-action-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; border-radius: 4px 0 0 4px;
+  background: linear-gradient(180deg, var(--duck2), var(--duck3));
+}
+.current-action-card.action-pulse {
+  animation: actionPulse 0.6s ease;
+}
+@keyframes actionPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); border-color: rgba(78,205,196,0.5); }
+  100% { transform: scale(1); }
+}
+.action-label {
+  font-size: 0.7rem; font-weight: 700;
+  color: var(--duck2); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 6px;
+}
+.action-text {
+  font-size: 1.1rem; font-weight: 600;
+  color: var(--text-primary); line-height: 1.5;
+}
+
+/* ============================================
+   队形可视化
+   ============================================ */
+.formation-area {
+  margin: 0 16px 12px;
+  flex-shrink: 0;
+}
+.formation-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.formation-title {
+  font-size: 0.8rem; font-weight: 700;
+  color: var(--text-secondary);
+}
+.formation-desc {
+  font-size: 0.7rem; color: var(--text-muted);
+  padding: 2px 8px; border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+
+.formation-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 160px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(10,10,26,0.9) 0%, rgba(26,26,62,0.6) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.formation-stage::before {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255,215,0,0.4), transparent);
+}
+
+.stage-label {
+  position: absolute;
+  font-size: 0.55rem; color: rgba(255,255,255,0.2);
+  font-weight: 600; letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.stage-label-front {
+  bottom: 6px; left: 50%;
+  transform: translateX(-50%);
+}
+.stage-label-back {
+  top: 6px; left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 队形中的鸭子点 */
+.formation-duck {
+  position: absolute;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 2;
+  cursor: default;
+}
+.formation-duck .duck-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.55rem; font-weight: 700;
+  color: rgba(0,0,0,0.7);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  transition: all 0.4s ease;
+  position: relative;
+}
+.formation-duck .duck-dot::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: -14px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5rem; color: var(--text-muted);
+  white-space: nowrap;
+}
+.formation-duck.singing .duck-dot {
+  transform: scale(1.3);
+  box-shadow: 0 0 20px currentColor;
+}
+.formation-duck.singing .duck-dot::before {
+  content: '♪'; position: absolute; top: -12px; right: -6px;
+  font-size: 10px; color: currentColor;
+  animation: noteFloat 0.8s ease infinite;
+}
+.formation-duck.my-duck .duck-dot {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* 队形连线 (可选) */
+.formation-line {
+  position: absolute;
+  background: rgba(255,255,255,0.08);
+  height: 1px;
+  transform-origin: left center;
+  z-index: 1;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   AB段循环控件
+   ============================================ */
+.ab-loop-range {
+  position: absolute; top: 0; height: 100%;
+  background: rgba(78,205,196,0.2);
+  border-left: 2px solid var(--duck2);
+  border-right: 2px solid var(--duck2);
+  border-radius: 2px;
+  pointer-events: none;
+  display: none;
+  z-index: 1;
+}
+.ab-loop-range.visible { display: block; }
+
+#prac-set-a-btn, #prac-set-b-btn {
+  width: 32px; height: 32px;
+  font-size: 11px;
+}
+#prac-set-a-btn.active-point { 
+  background: rgba(78,205,196,0.3); 
+  color: var(--duck2);
+  box-shadow: 0 0 8px rgba(78,205,196,0.3);
+}
+#prac-set-b-btn.active-point { 
+  background: rgba(78,205,196,0.3); 
+  color: var(--duck2);
+  box-shadow: 0 0 8px rgba(78,205,196,0.3);
+}
+#prac-clear-ab-btn {
+  width: auto; padding: 0 8px; height: 32px;
+}
+
+/* ============================================
+   全屏
+   ============================================ */
+:fullscreen #performance-mode,
+:-webkit-full-screen #performance-mode {
+  background: var(--bg-primary);
+}
+
+/* ============================================
+   响应式
+   ============================================ */
+@media (max-width: 768px) {
+  .main-title { font-size: 2.2rem; }
+  .mode-cards { flex-direction: column; align-items: center; }
+  .mode-card { width: 100%; max-width: 340px; }
+  .practice-content, .perf-main-content { flex-direction: column; }
+  .video-panel { width: 100%; height: 42%; }
+  .right-panel-container { width: 100%; height: 58%; border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
+  .choreo-section { max-height: 40%; }
+  .formation-stage { max-height: 120px; }
+  .role-buttons { gap: 8px; }
+  .role-btn { width: 60px; height: 72px; border-radius: 12px; }
+}
+@media (min-width: 1920px) {
+  .perf-duck-char svg { width: 70px; height: 70px; }
+}
+
+/* ============================================
+   隐藏
+   ============================================ */
+audio { display: none; }
+
+/* ============================================
+   过渡动画
+   ============================================ */
+.fade-in { animation: fadeIn 0.5s ease forwards; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.fade-out { animation: fadeOut 0.3s ease forwards; }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }

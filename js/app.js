@@ -126,7 +126,75 @@ const stagesData = {
         ]
     },
     5: {
-        title: "第5阶段：第二段主歌",
+        title: "第5阶段：副歌（再唱一遍）",
+        tip: "🎧 副歌第二遍！更加熟练地跟唱，加深记忆！",
+        cards: [
+            {
+                lyrics: "I won't give up\nno I won't give in",
+                phonetic: "/aɪ/ WON'T GIVE /ʌp/, /noʊ/ /aɪ/ WON'T GIVE /ɪn/",
+                translation: "我不会放弃\n不，我不会屈服",
+                rhythm: ["I", "won't", "give", "up", "no", "I", "won't", "give", "in"],
+                strongBeats: [0, 2, 4, 6, 8],
+                audio: "audio/stage5_card1.mp3"
+            },
+            {
+                lyrics: "Till I reach the end\nand then I'll start again",
+                phonetic: "/tɪl/ /aɪ/ REACH the END, and /ðen/ /aɪl/ START a·GAIN",
+                translation: "直到我到达终点\n然后我会重新开始",
+                rhythm: ["Till", "I", "reach", "the", "end", "and", "then", "I'll", "start", "a-gain"],
+                strongBeats: [0, 2, 4, 8, 9],
+                audio: "audio/stage5_card2.mp3"
+            },
+            {
+                lyrics: "No I won't leave\nI wanna try everything",
+                phonetic: "/noʊ/ /aɪ/ WON'T /liːv/, /aɪ/ WAN·na /traɪ/ EV·ry·thing",
+                translation: "不，我不会离开\n我想要尝试一切",
+                rhythm: ["No", "I", "won't", "leave", "I", "wan-na", "try", "ev-ery-thing"],
+                strongBeats: [0, 2, 3, 4, 6, 7],
+                audio: "audio/stage5_card3.mp3"
+            },
+            {
+                lyrics: "I wanna try\neven though I could fail",
+                phonetic: "/aɪ/ WAN·na /traɪ/, EE·ven /ðoʊ/ /aɪ/ /kʊd/ /feɪl/",
+                translation: "我想要尝试\n即使我可能会失败",
+                rhythm: ["I", "wan-na", "try", "e-ven", "though", "I", "could", "fail"],
+                strongBeats: [0, 2, 3, 7],
+                audio: "audio/stage5_card4.mp3"
+            }
+        ]
+    },
+    6: {
+        title: "第6阶段：间奏哼唱",
+        tip: "🎧 轻松的间奏！跟着节奏哼唱 Oh~ Try Everything!",
+        cards: [
+            {
+                lyrics: "Oh oh oh oh oooh\nTry everything",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/, /traɪ/ EV·ry·thing",
+                translation: "（哼唱旋律）\n尝试一切",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh", "try", "ev-ery-thing"],
+                strongBeats: [0, 4, 5, 6],
+                audio: "audio/stage6_card1.mp3"
+            },
+            {
+                lyrics: "Oh oh oh oh oooh\nOh oh oh oh oooh",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/ × 2",
+                translation: "（跟着旋律继续哼唱）",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh~"],
+                strongBeats: [0, 4],
+                audio: "audio/stage6_card2.mp3"
+            },
+            {
+                lyrics: "Oh oh oh oh oooh\nTry everything",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/, /traɪ/ EV·ry·thing",
+                translation: "（哼唱旋律）\n尝试一切",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh", "try", "ev-ery-thing"],
+                strongBeats: [0, 4, 5, 6],
+                audio: "audio/stage6_card3.mp3"
+            }
+        ]
+    },
+    7: {
+        title: "第7阶段：第二段主歌",
         tip: "🎧 温暖鼓励的一段：你已经走了很远了！",
         cards: [
             {
@@ -135,7 +203,7 @@ const stagesData = {
                 translation: "看看你已经走了多远\n你的心充满了爱",
                 rhythm: ["Look", "how", "far", "you've", "come", "you", "filled", "your", "heart", "with", "love"],
                 strongBeats: [0, 2, 4, 6, 8, 10],
-                audio: "audio/stage5_card1.mp3"
+                audio: "audio/stage7_card1.mp3"
             },
             {
                 lyrics: "Baby you've done enough\ntake a deep breath",
@@ -143,7 +211,7 @@ const stagesData = {
                 translation: "宝贝你已经做得够多了\n深呼吸一下",
                 rhythm: ["Ba-by", "you've", "done", "e-nough", "take", "a", "deep", "breath"],
                 strongBeats: [0, 2, 3, 4, 6, 7],
-                audio: "audio/stage5_card2.mp3"
+                audio: "audio/stage7_card2.mp3"
             },
             {
                 lyrics: "Don't beat yourself up\ndon't need to run so fast",
@@ -151,7 +219,7 @@ const stagesData = {
                 translation: "别太自责了\n不需要跑那么快",
                 rhythm: ["Don't", "beat", "your-self", "up", "don't", "need", "to", "run", "so", "fast"],
                 strongBeats: [0, 1, 3, 4, 7, 9],
-                audio: "audio/stage5_card3.mp3"
+                audio: "audio/stage7_card3.mp3"
             },
             {
                 lyrics: "Sometimes we come last\nbut we did our best",
@@ -159,12 +227,82 @@ const stagesData = {
                 translation: "有时候我们会落在最后\n但我们已经尽力了",
                 rhythm: ["Some-times", "we", "come", "last", "but", "we", "did", "our", "best"],
                 strongBeats: [0, 2, 3, 4, 6, 8],
-                audio: "audio/stage5_card4.mp3"
+                audio: "audio/stage7_card4.mp3"
             }
         ]
     },
-    6: {
-        title: "第6阶段：高潮尾声",
+    8: {
+        title: "第8阶段：副歌大合唱",
+        tip: "🎧 连续两遍副歌，情感最强烈的部分！大声唱出来！",
+        cards: [
+            {
+                lyrics: "I won't give up\nno I won't give in",
+                phonetic: "/aɪ/ WON'T GIVE /ʌp/, /noʊ/ /aɪ/ WON'T GIVE /ɪn/",
+                translation: "我不会放弃\n不，我不会屈服",
+                rhythm: ["I", "won't", "give", "up", "no", "I", "won't", "give", "in"],
+                strongBeats: [0, 2, 4, 6, 8],
+                audio: "audio/stage8_card1.mp3"
+            },
+            {
+                lyrics: "Till I reach the end\nand then I'll start again",
+                phonetic: "/tɪl/ /aɪ/ REACH the END, and /ðen/ /aɪl/ START a·GAIN",
+                translation: "直到我到达终点\n然后我会重新开始",
+                rhythm: ["Till", "I", "reach", "the", "end", "and", "then", "I'll", "start", "a-gain"],
+                strongBeats: [0, 2, 4, 8, 9],
+                audio: "audio/stage8_card2.mp3"
+            },
+            {
+                lyrics: "No I won't leave\nI wanna try everything",
+                phonetic: "/noʊ/ /aɪ/ WON'T /liːv/, /aɪ/ WAN·na /traɪ/ EV·ry·thing",
+                translation: "不，我不会离开\n我想要尝试一切",
+                rhythm: ["No", "I", "won't", "leave", "I", "wan-na", "try", "ev-ery-thing"],
+                strongBeats: [0, 2, 3, 4, 6, 7],
+                audio: "audio/stage8_card3.mp3"
+            },
+            {
+                lyrics: "I wanna try\neven though I could fail",
+                phonetic: "/aɪ/ WAN·na /traɪ/, EE·ven /ðoʊ/ /aɪ/ /kʊd/ /feɪl/",
+                translation: "我想要尝试\n即使我可能会失败",
+                rhythm: ["I", "wan-na", "try", "e-ven", "though", "I", "could", "fail"],
+                strongBeats: [0, 2, 3, 7],
+                audio: "audio/stage8_card4.mp3"
+            },
+            {
+                lyrics: "I won't give up\nno I won't give in",
+                phonetic: "/aɪ/ WON'T GIVE /ʌp/, /noʊ/ /aɪ/ WON'T GIVE /ɪn/",
+                translation: "我不会放弃\n不，我不会屈服",
+                rhythm: ["I", "won't", "give", "up", "no", "I", "won't", "give", "in"],
+                strongBeats: [0, 2, 4, 6, 8],
+                audio: "audio/stage8_card5.mp3"
+            },
+            {
+                lyrics: "Till I reach the end\nand then I'll start again",
+                phonetic: "/tɪl/ /aɪ/ REACH the END, and /ðen/ /aɪl/ START a·GAIN",
+                translation: "直到我到达终点\n然后我会重新开始",
+                rhythm: ["Till", "I", "reach", "the", "end", "and", "then", "I'll", "start", "a-gain"],
+                strongBeats: [0, 2, 4, 8, 9],
+                audio: "audio/stage8_card6.mp3"
+            },
+            {
+                lyrics: "No I won't leave\nI wanna try everything",
+                phonetic: "/noʊ/ /aɪ/ WON'T /liːv/, /aɪ/ WAN·na /traɪ/ EV·ry·thing",
+                translation: "不，我不会离开\n我想要尝试一切",
+                rhythm: ["No", "I", "won't", "leave", "I", "wan-na", "try", "ev-ery-thing"],
+                strongBeats: [0, 2, 3, 4, 6, 7],
+                audio: "audio/stage8_card7.mp3"
+            },
+            {
+                lyrics: "I wanna try\neven though I could fail",
+                phonetic: "/aɪ/ WAN·na /traɪ/, EE·ven /ðoʊ/ /aɪ/ /kʊd/ /feɪl/",
+                translation: "我想要尝试\n即使我可能会失败",
+                rhythm: ["I", "wan-na", "try", "e-ven", "though", "I", "could", "fail"],
+                strongBeats: [0, 2, 3, 7],
+                audio: "audio/stage8_card8.mp3"
+            }
+        ]
+    },
+    9: {
+        title: "第9阶段：高潮尾声",
         tip: "🎧 最感人的尾声！拥抱错误，每天都在进步！",
         cards: [
             {
@@ -173,7 +311,7 @@ const stagesData = {
                 translation: "我会继续犯\n那些新的错误",
                 rhythm: ["I'll", "keep", "on", "mak-ing", "those", "new", "mis-takes"],
                 strongBeats: [0, 1, 3, 5, 6],
-                audio: "audio/stage6_card1.mp3"
+                audio: "audio/stage9_card1.mp3"
             },
             {
                 lyrics: "I'll keep on making them\nevery day",
@@ -181,7 +319,7 @@ const stagesData = {
                 translation: "我会每天都继续犯\n新的错误",
                 rhythm: ["I'll", "keep", "on", "mak-ing", "them", "ev-ery", "day"],
                 strongBeats: [0, 1, 3, 5, 6],
-                audio: "audio/stage6_card2.mp3"
+                audio: "audio/stage9_card2.mp3"
             },
             {
                 lyrics: "Those new mistakes",
@@ -189,7 +327,45 @@ const stagesData = {
                 translation: "那些新的错误\n（拥抱每一次尝试！）",
                 rhythm: ["Those", "new", "mis-takes"],
                 strongBeats: [0, 1, 2],
-                audio: "audio/stage6_card3.mp3"
+                audio: "audio/stage9_card3.mp3"
+            }
+        ]
+    },
+    10: {
+        title: "第10阶段：尾声哼唱",
+        tip: "🎧 最后的尾声！跟着旋律一起唱 Try Everything！",
+        cards: [
+            {
+                lyrics: "Oh oh oh oh oooh\nTry everything",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/, /traɪ/ EV·ry·thing",
+                translation: "（哼唱旋律）\n尝试一切",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh", "try", "ev-ery-thing"],
+                strongBeats: [0, 4, 5, 6],
+                audio: "audio/stage10_card1.mp3"
+            },
+            {
+                lyrics: "Oh oh oh oh oooh\nOh oh oh oh oooh",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/ × 2",
+                translation: "（跟着旋律继续哼唱）",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh~"],
+                strongBeats: [0, 4],
+                audio: "audio/stage10_card2.mp3"
+            },
+            {
+                lyrics: "Oh oh oh oh oooh\nTry everything",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/, /traɪ/ EV·ry·thing",
+                translation: "（哼唱旋律）\n尝试一切",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh", "try", "ev-ery-thing"],
+                strongBeats: [0, 4, 5, 6],
+                audio: "audio/stage10_card3.mp3"
+            },
+            {
+                lyrics: "Oh oh oh oh oooh\nTry everything",
+                phonetic: "/oʊ/ - /oʊ/ - /oʊ/ - /oʊ/ - /uː/, /traɪ/ EV·ry·thing",
+                translation: "（最后一遍！你做到了！🎉）\n尝试一切！",
+                rhythm: ["Oh", "oh", "oh", "oh", "oooh", "try", "ev-ery-thing"],
+                strongBeats: [0, 4, 5, 6],
+                audio: "audio/stage10_card4.mp3"
             }
         ]
     }
@@ -498,7 +674,7 @@ function setupEventListeners() {
     nextBtn.addEventListener('click', () => {
         completedStages.add(currentStage);
         
-        if (currentStage < 6) {
+        if (currentStage < 10) {
             switchStage(currentStage + 1);
         } else {
             celebrateCompletion();
@@ -550,7 +726,7 @@ function handleSwipe() {
     // 不在输入框或按钮区域时才处理
     if (diffX < 0) {
         // 向左滑 → 下一阶段
-        if (currentStage < 6) {
+        if (currentStage < 10) {
             completedStages.add(currentStage);
             switchStage(currentStage + 1);
             updateProgress();
@@ -608,7 +784,7 @@ function updateStageBtns() {
 
 // 更新进度条
 function updateProgress() {
-    const progress = (completedStages.size / 6) * 100;
+    const progress = (completedStages.size / 10) * 100;
     progressFill.style.width = `${Math.max(progress, 16)}%`;
 }
 
@@ -679,7 +855,7 @@ document.addEventListener('keydown', (e) => {
             if (currentStage > 1) switchStage(currentStage - 1);
             break;
         case 'ArrowRight':
-            if (currentStage < 6) {
+            if (currentStage < 10) {
                 completedStages.add(currentStage);
                 switchStage(currentStage + 1);
                 updateProgress();
@@ -719,7 +895,7 @@ const FullPlayer = (() => {
     // 构建扁平化数据
     function buildAllCards() {
         allCards = [];
-        for (let stageNum = 1; stageNum <= 6; stageNum++) {
+        for (let stageNum = 1; stageNum <= 10; stageNum++) {
             const stage = stagesData[stageNum];
             if (!stage) continue;
             stage.cards.forEach((card, idx) => {

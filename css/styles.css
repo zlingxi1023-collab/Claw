@@ -61,8 +61,29 @@ html, body {
   animation-delay: var(--delay);
   filter: drop-shadow(0 0 8px var(--duck-color));
 }
+.loading-progress-container {
+  width: 280px; max-width: 80vw;
+  margin-bottom: 16px;
+}
+.loading-progress-bar {
+  width: 100%; height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px; overflow: hidden;
+}
+.loading-progress-fill {
+  height: 100%; width: 0%;
+  background: var(--all-ducks); background-size: 300% 100%;
+  animation: progressGlow 3s linear infinite;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.loading-progress-text {
+  font-size: 0.8rem; color: var(--text-secondary);
+  text-align: center; margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
 .loading-text {
-  font-size: 1rem; color: var(--text-muted);
+  font-size: 0.9rem; color: var(--text-muted);
   animation: pulse 1.5s ease-in-out infinite;
 }
 @keyframes loadBounce {
@@ -498,18 +519,31 @@ html, body {
   font-weight: 600;
 }
 
-/* 歌词行状态 */
+/* 歌词行状态 - 当前播放行高亮 */
 .practice-lyric-line.active {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.08);
-  transform: scale(1.01);
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,215,0,0.35);
+  transform: scale(1.02);
+  box-shadow: 0 0 16px rgba(255,215,0,0.08), inset 0 0 0 1px rgba(255,215,0,0.12);
+  position: relative;
+}
+.practice-lyric-line.active::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; border-radius: 3px 0 0 3px;
+  background: linear-gradient(180deg, #FFD700, #FFA502);
+  box-shadow: 0 0 8px rgba(255,215,0,0.5);
 }
 .practice-lyric-line.active .lyric-text {
-  color: var(--text-primary); font-weight: 700; font-size: 1.1rem;
+  color: #fff; font-weight: 700; font-size: 1.1rem;
+  text-shadow: 0 0 10px rgba(255,255,255,0.15);
 }
 .practice-lyric-line.active .lyric-role-indicator {
-  transform: scale(1.15);
-  box-shadow: 0 0 12px var(--indicator-color, rgba(255,255,255,0.1));
+  transform: scale(1.2);
+  box-shadow: 0 0 14px var(--indicator-color, rgba(255,215,0,0.3));
+}
+.practice-lyric-line.active .singer-tag {
+  opacity: 1; font-weight: 700;
 }
 .practice-lyric-line.past .lyric-text { color: var(--text-muted); }
 .practice-lyric-line.past .lyric-role-indicator { opacity: 0.4; }
@@ -717,30 +751,142 @@ html, body {
 }
 
 /* ============================================
-   全屏
+   全屏（含webkit前缀）
    ============================================ */
 :fullscreen #performance-mode,
-:-webkit-full-screen #performance-mode {
+:-webkit-full-screen #performance-mode,
+:-moz-full-screen #performance-mode,
+:-ms-fullscreen #performance-mode {
   background: var(--bg-primary);
 }
 
 /* ============================================
-   响应式
+   安全区域（iPhone刘海屏适配）
    ============================================ */
-@media (max-width: 768px) {
-  .main-title { font-size: 2.2rem; }
-  .mode-cards { flex-direction: column; align-items: center; }
-  .mode-card { width: 100%; max-width: 340px; }
-  .practice-content, .perf-main-content { flex-direction: column; }
-  .video-panel { width: 100%; height: 42%; }
-  .right-panel-container { width: 100%; height: 58%; border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
-  .choreo-section { max-height: 40%; }
-  .formation-stage { max-height: 120px; }
-  .role-buttons { gap: 8px; }
-  .role-btn { width: 60px; height: 72px; border-radius: 12px; }
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
+
+/* ============================================
+   触摸设备优化
+   ============================================ */
+@media (hover: none) and (pointer: coarse) {
+  .ctrl-btn { width: 48px; height: 48px; min-width: 48px; }
+  .ctrl-btn.play-btn { width: 56px; height: 56px; }
+  .toolbar-role-dot { width: 32px; height: 32px; }
+  .progress-bar-container { height: 10px; }
+  .progress-bar-thumb { width: 18px; height: 18px; transform: translate(50%, -50%) scale(1) !important; }
+  .mode-card:hover { transform: none; }
+  .mode-card:active { transform: scale(0.98); }
+}
+
+/* ============================================
+   响应式 - PC大屏 (≥1920px)
+   ============================================ */
 @media (min-width: 1920px) {
   .perf-duck-char svg { width: 70px; height: 70px; }
+  .practice-lyric-line.active .lyric-text { font-size: 1.25rem; }
+}
+
+/* ============================================
+   响应式 - iPad横屏 (1024-1199px)
+   ============================================ */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .video-panel { width: 55%; }
+  .right-panel-container { width: 45%; }
+  .main-title { font-size: 3rem; }
+  .mode-card { width: 260px; padding: 24px 20px; }
+  .role-btn { width: 68px; height: 82px; }
+}
+
+/* ============================================
+   响应式 - iPad竖屏 & 小平板 (768-1023px)
+   ============================================ */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .main-title { font-size: 2.8rem; }
+  .mode-cards { gap: 16px; }
+  .mode-card { width: 240px; padding: 24px 18px; }
+  .practice-content, .perf-main-content { flex-direction: column; }
+  .video-panel { width: 100%; height: 45%; }
+  .right-panel-container { width: 100%; height: 55%; border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
+  .choreo-section { max-height: 35%; }
+  .formation-stage { max-height: 130px; }
+}
+
+/* ============================================
+   响应式 - 手机 (≤767px)
+   ============================================ */
+@media (max-width: 767px) {
+  .main-title { font-size: 2rem; }
+  .subtitle { font-size: 0.9rem; }
+  .mode-cards { flex-direction: column; align-items: center; gap: 14px; }
+  .mode-card { width: 100%; max-width: 340px; padding: 22px 18px; }
+  .mode-card h2 { font-size: 1.2rem; }
+  .card-icon { font-size: 2.8rem; }
+
+  .role-selector h3 { font-size: 0.9rem; }
+  .role-buttons { gap: 8px; }
+  .role-btn { width: 56px; height: 68px; border-radius: 12px; }
+  .role-btn .role-label { font-size: 0.55rem; }
+
+  .practice-content, .perf-main-content { flex-direction: column; }
+  .video-panel { width: 100%; height: 40%; min-height: 180px; }
+  .right-panel-container { width: 100%; flex: 1; border-left: none; border-top: 1px solid rgba(255,255,255,0.06); }
+  .choreo-section { max-height: 30%; }
+  .formation-stage { max-height: 100px; }
+
+  .toolbar-title { font-size: 0.85rem; }
+  .toolbar-switch { font-size: 0.7rem; padding: 0 10px; }
+
+  .practice-lyric-line { padding: 8px 10px; }
+  .lyric-role-indicator { width: 24px; height: 24px; margin-right: 8px; }
+  .lyric-text { font-size: 0.9rem; }
+  .practice-lyric-line.active .lyric-text { font-size: 1rem; }
+  .singer-tags { display: none; } /* 手机屏幕太小，隐藏角色标签 */
+
+  .video-controls .ctrl-btn { width: 36px; height: 36px; }
+  .video-controls .ctrl-btn.play-btn { width: 44px; height: 44px; }
+  .time-display { font-size: 0.75rem; min-width: 80px; }
+
+  .prac-duck-strip { gap: 6px; padding: 6px 8px; height: 44px; }
+
+  .toolbar-role-picker { gap: 4px; }
+  .toolbar-role-dot { width: 22px; height: 22px; font-size: 8px; }
+
+  /* 隐藏编排面板在手机上 - 太小了 */
+  .choreo-section, #perf-choreo-panel-view { display: none !important; }
+  .panel-divider { display: none; }
+  .lyrics-section, #perf-lyrics-panel-view { flex: 1; }
+  .toolbar-view-tabs { display: none; }
+}
+
+/* ============================================
+   响应式 - 小手机 (≤375px, iPhone SE等)
+   ============================================ */
+@media (max-width: 375px) {
+  .main-title { font-size: 1.7rem; }
+  .title-ducks-container { gap: 4px; }
+  .mode-card { padding: 16px 14px; }
+  .role-btn { width: 48px; height: 60px; }
+  .video-panel { min-height: 160px; }
+}
+
+/* ============================================
+   横屏模式优化
+   ============================================ */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* 手机横屏 */
+  .practice-content, .perf-main-content { flex-direction: row; }
+  .video-panel { width: 55%; height: 100%; }
+  .right-panel-container { width: 45%; height: 100%; border-top: none; border-left: 1px solid rgba(255,255,255,0.06); }
+  .prac-duck-strip { height: 40px; padding: 4px 8px; }
+  .video-controls { padding: 6px 12px; }
+  .lyrics-panel-header { padding: 8px 12px; }
+  .choreo-section, #perf-choreo-panel-view { display: none !important; }
+  .panel-divider { display: none; }
 }
 
 /* ============================================

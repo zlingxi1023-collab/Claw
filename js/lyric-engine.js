@@ -25,27 +25,26 @@ class LyricEngine {
   }
 
   init(mediaElement, mode) {
+    // 防止重复绑定事件
+    if (this._inited && this.mediaElement === mediaElement) return;
+
     this.mediaElement = mediaElement;
     this.mode = mode;
     this.currentIndex = -1;
     this.currentFormation = null;
     this.isPlaying = false;
+    this._inited = true;
 
-    this.mediaElement.addEventListener('play', () => {
-      this.isPlaying = true;
-      this._startSync();
-    });
-    this.mediaElement.addEventListener('pause', () => {
-      this.isPlaying = false;
-      this._stopSync();
-    });
-    this.mediaElement.addEventListener('ended', () => {
-      this.isPlaying = false;
-      this._stopSync();
-    });
-    this.mediaElement.addEventListener('seeked', () => {
-      this._updateCurrentLine();
-    });
+    // 绑定事件前先移除旧的（防止重复绑定）
+    this._onPlay = () => { this.isPlaying = true; this._startSync(); };
+    this._onPause = () => { this.isPlaying = false; this._stopSync(); };
+    this._onEnded = () => { this.isPlaying = false; this._stopSync(); };
+    this._onSeeked = () => { this._updateCurrentLine(); };
+
+    this.mediaElement.addEventListener('play', this._onPlay);
+    this.mediaElement.addEventListener('pause', this._onPause);
+    this.mediaElement.addEventListener('ended', this._onEnded);
+    this.mediaElement.addEventListener('seeked', this._onSeeked);
   }
 
   togglePlay() {
@@ -188,12 +187,19 @@ class LyricEngine {
 
   destroy() {
     this._stopSync();
+    if (this.mediaElement && this._onPlay) {
+      this.mediaElement.removeEventListener('play', this._onPlay);
+      this.mediaElement.removeEventListener('pause', this._onPause);
+      this.mediaElement.removeEventListener('ended', this._onEnded);
+      this.mediaElement.removeEventListener('seeked', this._onSeeked);
+    }
     this.mediaElement = null;
     this.onLyricChange = null;
     this.onTimeUpdate = null;
     this.onActionChange = null;
     this.onFormationChange = null;
     this.onLoopChange = null;
+    this._inited = false;
   }
 }
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>🦆 Six Little Ducks - 合唱表演</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
 </head>
 <body>
-  <!-- 加载动画 -->
+  <!-- 资源加载页 -->
   <div class="loading-overlay" id="loading">
     <div class="loading-ducks">
       <div class="loading-duck" style="--duck-color: #FF6B6B; --delay: 0s">🦆</div>
@@ -20,7 +20,13 @@
       <div class="loading-duck" style="--duck-color: #FFEAA7; --delay: 0.4s">🦆</div>
       <div class="loading-duck" style="--duck-color: #DDA0DD; --delay: 0.5s">🦆</div>
     </div>
-    <div class="loading-text">Loading...</div>
+    <div class="loading-progress-container">
+      <div class="loading-progress-bar">
+        <div class="loading-progress-fill" id="loading-progress-fill"></div>
+      </div>
+      <div class="loading-progress-text" id="loading-progress-text">准备中...</div>
+    </div>
+    <div class="loading-text" id="loading-status">正在加载资源，请稍候</div>
   </div>
 
   <!-- ========== 模式选择界面 ========== -->
@@ -84,7 +90,7 @@
     <div class="perf-main-content">
       <!-- 视频区 -->
       <div class="video-panel perf-video-panel">
-        <video id="perf-video" preload="auto" muted playsinline>
+        <video id="perf-video" preload="auto" muted playsinline webkit-playsinline>
           <source src="media/six-little-ducks-video-muted.mp4" type="video/mp4">
         </video>
         <div class="video-controls">
@@ -160,7 +166,7 @@
     </div>
 
     <!-- 隐藏的音频播放器 - demucs从视频提取的纯伴奏 -->
-    <audio id="perf-audio" preload="auto">
+    <audio id="perf-audio" preload="auto" playsinline>
       <source src="media/six-little-ducks-instrumental-extracted.mp3" type="audio/mpeg">
     </audio>
   </div>
@@ -183,7 +189,7 @@
     <div class="practice-content">
       <!-- 视频区 -->
       <div class="video-panel">
-        <video id="prac-video" preload="auto">
+        <video id="prac-video" preload="auto" playsinline webkit-playsinline>
           <source src="media/six-little-ducks-video.mp4" type="video/mp4">
         </video>
         <div class="video-controls">

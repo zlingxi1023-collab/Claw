@@ -43,10 +43,124 @@
     perfEngine = new LyricEngine();
     pracEngine = new LyricEngine();
 
-    setTimeout(() => {
-      loadingOverlay.classList.add('hidden');
-      setTimeout(() => loadingOverlay.style.display = 'none', 600);
-    }, 1000);
+    // 预加载所有媒体资源后才允许进入模式
+    preloadAllResources();
+  }
+
+  // ==========================================
+  //  资源预加载系统
+  // ==========================================
+  function preloadAllResources() {
+    const progressFill = $('#loading-progress-fill');
+    const progressText = $('#loading-progress-text');
+    const statusText = $('#loading-status');
+    const modeCards = $$('.mode-card');
+
+    // 禁用模式卡片点击
+    modeCards.forEach(c => c.style.pointerEvents = 'none');
+
+    const resources = [
+      { el: $('#perf-video'), type: 'video', name: '表演视频 (静音)' },
+      { el: $('#prac-video'), type: 'video', name: '练习视频' },
+      { el: $('#perf-audio'), type: 'audio', name: '伴奏音频' },
+    ];
+
+    let loaded = 0;
+    const total = resources.length;
+    let allReady = false;
+
+    function updateProgress() {
+      const pct = Math.round((loaded / total) * 100);
+      if (progressFill) progressFill.style.width = pct + '%';
+      if (progressText) progressText.textContent = `${loaded}/${total} 资源已加载 (${pct}%)`;
+    }
+
+    function checkAllLoaded() {
+      if (allReady) return;
+      if (loaded >= total) {
+        allReady = true;
+        if (statusText) statusText.textContent = '✅ 资源加载完成！';
+        if (progressFill) progressFill.style.width = '100%';
+        // 启用模式卡片
+        modeCards.forEach(c => c.style.pointerEvents = '');
+        setTimeout(() => {
+          loadingOverlay.classList.add('hidden');
+          setTimeout(() => loadingOverlay.style.display = 'none', 600);
+        }, 500);
+      }
+    }
+
+    // 设置超时（30秒后强制放行，避免永远卡住）
+    const forceTimer = setTimeout(() => {
+      if (!allReady) {
+        console.warn('Resource loading timed out, forcing entry.');
+        allReady = true;
+        loaded = total;
+        updateProgress();
+        if (statusText) statusText.textContent = '⚠️ 部分资源仍在加载...';
+        modeCards.forEach(c => c.style.pointerEvents = '');
+        setTimeout(() => {
+          loadingOverlay.classList.add('hidden');
+          setTimeout(() => loadingOverlay.style.display = 'none', 600);
+        }, 500);
+      }
+    }, 30000);
+
+    resources.forEach((res) => {
+      if (!res.el) { loaded++; updateProgress(); checkAllLoaded(); return; }
+
+      const el = res.el;
+
+      // 检查是否已经可以播放
+      if (el.readyState >= 3) { // HAVE_FUTURE_DATA
+        loaded++;
+        if (statusText) statusText.textContent = `✓ ${res.name} 已就绪`;
+        updateProgress();
+        checkAllLoaded();
+        return;
+      }
+
+      function onCanPlay() {
+        el.removeEventListener('canplaythrough', onCanPlay);
+        el.removeEventListener('error', onError);
+        loaded++;
+        if (statusText) statusText.textContent = `✓ ${res.name} 加载完成`;
+        updateProgress();
+        checkAllLoaded();
+      }
+
+      function onError() {
+        el.removeEventListener('canplaythrough', onCanPlay);
+        el.removeEventListener('error', onError);
+        loaded++;
+        console.warn(`Failed to load: ${res.name}`);
+        if (statusText) statusText.textContent = `⚠ ${res.name} 加载失败`;
+        updateProgress();
+        checkAllLoaded();
+      }
+
+      // 使用 canplaythrough 确保可以流畅播放
+      el.addEventListener('canplaythrough', onCanPlay, { once: true });
+      el.addEventListener('error', onError, { once: true });
+
+      // 对于视频，监听 progress 事件来显示下载进度
+      if (res.type === 'video') {
+        el.addEventListener('progress', () => {
+          if (el.buffered.length > 0 && el.duration > 0) {
+            const buffered = el.buffered.end(el.buffered.length - 1);
+            const bufPct = Math.round((buffered / el.duration) * 100);
+            if (statusText && !allReady) {
+              statusText.textContent = `⏳ ${res.name} 缓冲中 ${bufPct}%...`;
+            }
+          }
+        });
+      }
+
+      // 强制开始加载
+      el.load();
+    });
+
+    updateProgress();
   }
 
   // ==========================================
@@ -223,6 +337,9 @@
     $('#btn-practice').addEventListener('click', () => switchMode('practice'));
   }
 
+  let perfEngineInited = false;
+  let pracEngineInited = false;
+
   function switchMode(mode) {
     if (perfEngine && perfEngine.mediaElement) perfEngine.mediaElement.pause();
     if (pracEngine && pracEngine.mediaElement) pracEngine.mediaElement.pause();
@@ -235,29 +352,38 @@
       practiceMode.classList.remove('active');
       const audio = $('#perf-audio');
       const video = $('#perf-video');
-      perfEngine.init(audio, 'performance');
+
+      if (!perfEngineInited) {
+        perfEngine.init(audio, 'performance');
+        setupPlayPauseIcons('#perf-play-btn', audio);
+        syncPerfVideo(audio, video);
+        perfEngineInited = true;
+      }
+
       perfEngine.setRole(selectedRole);
       perfEngine.onLyricChange = onPerfLyricChange;
       perfEngine.onTimeUpdate = onPerfTimeUpdate;
       perfEngine.onActionChange = onPerfActionChange;
       perfEngine.onFormationChange = onPerfFormationChange;
-      setupPlayPauseIcons('#perf-play-btn', audio);
       updatePerfLyricsHighlight();
 
-      // 同步视频与伴奏音频
-      syncPerfVideo(audio, video);
     } else {
       practiceMode.classList.add('active');
       performanceMode.classList.remove('active');
       const video = $('#prac-video');
-      pracEngine.init(video, 'practice');
+
+      if (!pracEngineInited) {
+        pracEngine.init(video, 'practice');
+        setupPlayPauseIcons('#prac-play-btn', video);
+        pracEngineInited = true;
+      }
+
       pracEngine.setRole(selectedRole);
       pracEngine.onLyricChange = onPracLyricChange;
       pracEngine.onTimeUpdate = onPracTimeUpdate;
       pracEngine.onActionChange = onPracActionChange;
       pracEngine.onFormationChange = onPracFormationChange;
       pracEngine.onLoopChange = onPracLoopChange;
-      setupPlayPauseIcons('#prac-play-btn', video);
     }
   }
 
@@ -325,7 +451,9 @@
       if (perfVideo) perfVideo.pause();
     }
     if (currentMode === 'practice' && pracEngine.mediaElement) pracEngine.mediaElement.pause();
-    if (document.fullscreenElement) document.exitFullscreen();
+    if (isFullscreen()) {
+      (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen).call(document);
+    }
 
     currentMode = null;
     performanceMode.classList.remove('active');
@@ -404,8 +532,13 @@
   }
 
   function updatePerfLyricsHighlight() {
-    $$('.perf-lyric-item').forEach((el, i) => {
+    // 作用域限定在表演模式容器内
+    const container = document.querySelector('#perf-lyrics-area');
+    if (!container) return;
+    container.querySelectorAll('.perf-lyric-item').forEach((el) => {
+      const i = parseInt(el.dataset.index, 10);
       const line = LYRICS_DATA[i];
+      if (!line) return;
       el.classList.remove('my-role');
       el.style.setProperty('--my-role-color', '');
 
@@ -417,7 +550,12 @@
   }
 
   function onPerfLyricChange(index, lyricLine) {
-    $$('.perf-lyric-item').forEach((el, i) => {
+    // 只更新表演模式容器内的歌词行
+    const container = document.querySelector('#perf-lyrics-area');
+    if (!container) return;
+
+    container.querySelectorAll('.perf-lyric-item').forEach((el) => {
+      const i = parseInt(el.dataset.index, 10);
       el.classList.remove('active', 'past');
       if (i === index) el.classList.add('active');
       else if (i < index) el.classList.add('past');
@@ -425,9 +563,8 @@
 
     // 滚动居中
     if (index >= 0) {
-      const activeEl = $(`.perf-lyric-item[data-index="${index}"]`);
+      const activeEl = container.querySelector(`.perf-lyric-item[data-index="${index}"]`);
       if (activeEl) {
-        const container = $('#perf-lyrics-area');
         const cRect = container.getBoundingClientRect();
         const eRect = activeEl.getBoundingClientRect();
         const offset = eRect.top - cRect.top - cRect.height / 2 + eRect.height / 2;
@@ -567,11 +704,7 @@
     $('#perf-back-btn').addEventListener('click', goBack);
 
     $('#perf-fullscreen-btn').addEventListener('click', () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else {
-        performanceMode.requestFullscreen().catch(() => {});
-      }
+      toggleFullscreen(performanceMode);
     });
 
     // 切换到练习模式
@@ -591,11 +724,13 @@
   //  通用鸭子动画更新
   // ==========================================
   function updateDuckAnimation(selector, lyricLine) {
-    $$(selector).forEach(el => el.classList.remove('singing'));
+    document.querySelectorAll(selector).forEach(el => el.classList.remove('singing'));
     if (lyricLine && lyricLine.singers.length > 0) {
       lyricLine.singers.forEach(singer => {
-        const el = $(`${selector}[data-role="${singer}"]`);
-        if (el) el.classList.add('singing');
+        // 在选择器中查找对应角色
+        document.querySelectorAll(selector).forEach(el => {
+          if (el.dataset.role === singer) el.classList.add('singing');
+        });
       });
     }
   }
@@ -671,8 +806,13 @@
   }
 
   function updatePracticeLyricsHighlight() {
-    $$('.practice-lyric-line').forEach((el, i) => {
+    // 作用域限定在练习模式容器内
+    const container = document.querySelector('#prac-lyrics-container');
+    if (!container) return;
+    container.querySelectorAll('.practice-lyric-line').forEach((el) => {
+      const i = parseInt(el.dataset.index, 10);
       const line = LYRICS_DATA[i];
+      if (!line) return;
       el.classList.remove('my-role');
       el.style.setProperty('--my-role-color', '');
 
@@ -684,7 +824,12 @@
   }
 
   function onPracLyricChange(index, lyricLine) {
-    $$('.practice-lyric-line').forEach((el, i) => {
+    // 只更新练习模式容器内的歌词行
+    const container = document.querySelector('#prac-lyrics-container');
+    if (!container) return;
+
+    container.querySelectorAll('.practice-lyric-line').forEach((el) => {
+      const i = parseInt(el.dataset.index, 10);
       el.classList.remove('active', 'past');
       if (i === index) el.classList.add('active');
       else if (i < index) el.classList.add('past');
@@ -692,9 +837,8 @@
 
     // 滚动居中
     if (index >= 0) {
-      const activeEl = $(`.practice-lyric-line[data-index="${index}"]`);
+      const activeEl = container.querySelector(`.practice-lyric-line[data-index="${index}"]`);
       if (activeEl) {
-        const container = $('#prac-lyrics-container');
         const cRect = container.getBoundingClientRect();
         const eRect = activeEl.getBoundingClientRect();
         const offset = eRect.top - cRect.top - cRect.height / 2 + eRect.height / 2;
@@ -708,8 +852,8 @@
       if (tag) tag.textContent = lyricLine.section || '';
     }
 
-    // 鸭子动画
-    updateDuckAnimation('.prac-duck-mini', lyricLine);
+    // 鸭子动画 - 只更新练习模式的鸭子条
+    updateDuckAnimation('#prac-duck-strip .prac-duck-mini', lyricLine);
 
     // 同步队形演唱者高亮
     updateFormationSingers(lyricLine);
@@ -926,19 +1070,15 @@
     if (titleEl) titleEl.textContent = '📍 ' + formationData.name;
     if (descEl) descEl.textContent = formationData.desc;
 
-    const stageRect = stage.getBoundingClientRect();
-
-    // 更新每只鸭子的位置
-    $$('.formation-duck').forEach(el => {
+    // 只更新练习模式队形面板中的鸭子
+    stage.querySelectorAll('.formation-duck').forEach(el => {
       const role = el.dataset.role;
       const pos = formationData.positions[role];
       if (pos) {
-        // 位置使用百分比，需要减去鸭子自身尺寸的一半
         el.style.left = `calc(${pos.x}% - 18px)`;
         el.style.top = `calc(${pos.y}% - 18px)`;
       }
 
-      // 标记当前演唱者
       el.classList.remove('singing', 'my-duck');
       if (pracEngine && pracEngine.currentIndex >= 0) {
         const line = LYRICS_DATA[pracEngine.currentIndex];
@@ -952,9 +1092,11 @@
     });
   }
 
-  // 更新队形中的演唱高亮（不需要移动位置）
+  // 更新队形中的演唱高亮（只更新练习模式）
   function updateFormationSingers(lyricLine) {
-    $$('.formation-duck').forEach(el => {
+    const stage = $('#formation-stage');
+    if (!stage) return;
+    stage.querySelectorAll('.formation-duck').forEach(el => {
       const role = el.dataset.role;
       el.classList.remove('singing');
       if (lyricLine && lyricLine.singers.includes(role)) {
@@ -964,24 +1106,56 @@
   }
 
   // ==========================================
-  //  通用进度条交互
+  //  通用进度条交互（鼠标+触摸）
   // ==========================================
   function bindProgressBar(barSelector, getEngine) {
     const bar = $(barSelector);
+    if (!bar) return;
     let isDragging = false;
 
-    function seekFromEvent(e) {
+    function seekFromClientX(clientX) {
       const engine = getEngine();
       if (!engine) return;
       const rect = bar.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       engine.seek(ratio * engine.getDuration());
     }
 
-    bar.addEventListener('mousedown', (e) => { isDragging = true; seekFromEvent(e); });
-    document.addEventListener('mousemove', (e) => { if (isDragging) seekFromEvent(e); });
+    // Mouse events
+    bar.addEventListener('mousedown', (e) => { isDragging = true; seekFromClientX(e.clientX); });
+    document.addEventListener('mousemove', (e) => { if (isDragging) seekFromClientX(e.clientX); });
     document.addEventListener('mouseup', () => { isDragging = false; });
-    bar.addEventListener('click', seekFromEvent);
+
+    // Touch events (mobile/iPad)
+    bar.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      if (e.touches.length > 0) seekFromClientX(e.touches[0].clientX);
+      e.preventDefault();
+    }, { passive: false });
+    bar.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches.length > 0) seekFromClientX(e.touches[0].clientX);
+      e.preventDefault();
+    }, { passive: false });
+    bar.addEventListener('touchend', () => { isDragging = false; });
+    bar.addEventListener('touchcancel', () => { isDragging = false; });
+
+    bar.addEventListener('click', (e) => seekFromClientX(e.clientX));
+  }
+
+  // ==========================================
+  //  跨浏览器全屏 API
+  // ==========================================
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+  }
+
+  function toggleFullscreen(el) {
+    if (isFullscreen()) {
+      (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen).call(document);
+    } else {
+      const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (rfs) rfs.call(el).catch(() => {});
+    }
   }
 
   // ==========================================
@@ -994,8 +1168,9 @@
       if (engine) engine.togglePlay();
     }
     if (e.code === 'Escape') {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (currentMode) goBack();
+      if (isFullscreen()) {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen).call(document);
+      } else if (currentMode) goBack();
     }
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
       e.preventDefault();
@@ -1004,8 +1179,7 @@
       if (engine) engine.seek(Math.max(0, engine.getCurrentTime() + delta));
     }
     if (e.code === 'KeyF' && currentMode === 'performance') {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else performanceMode.requestFullscreen().catch(() => {});
+      toggleFullscreen(performanceMode);
     }
   });
 

@@ -86,8 +86,8 @@
     <div class="perf-main-content">
       <!-- 视频区 -->
       <div class="video-panel perf-video-panel">
-        <video id="perf-video" preload="auto" muted playsinline webkit-playsinline>
-          <source src="media/six-little-ducks-video-muted.mp4" type="video/mp4">
+        <video id="perf-video" preload="metadata" muted playsinline webkit-playsinline>
+          <!-- HLS 源由 hls-loader.js 动态设置 -->
         </video>
         <div class="video-controls">
           <div class="progress-bar-container" id="perf-progress-bar">
@@ -160,8 +160,8 @@
     </div>
 
     <!-- 隐藏的音频播放器 - demucs从视频提取的纯伴奏 -->
-    <audio id="perf-audio" preload="auto" playsinline>
-      <source src="media/six-little-ducks-instrumental-extracted.mp3" type="audio/mpeg">
+    <audio id="perf-audio" preload="metadata" playsinline>
+      <!-- HLS 源由 hls-loader.js 动态设置 -->
     </audio>
   </div>
 
@@ -183,8 +183,8 @@
     <div class="practice-content">
       <!-- 视频区 -->
       <div class="video-panel">
-        <video id="prac-video" preload="auto" playsinline webkit-playsinline>
-          <source src="media/six-little-ducks-video.mp4" type="video/mp4">
+        <video id="prac-video" preload="metadata" playsinline webkit-playsinline>
+          <!-- HLS 源由 hls-loader.js 动态设置 -->
         </video>
         <div class="video-controls">
           <div class="progress-bar-container" id="prac-progress-bar">
@@ -268,6 +268,7 @@
   <!-- JS -->
   <script src="js/lyrics-data.js"></script>
   <script src="js/lyric-engine.js"></script>
+  <script src="js/hls-loader.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

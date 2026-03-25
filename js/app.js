@@ -43,12 +43,16 @@
     perfEngine = new LyricEngine();
     pracEngine = new LyricEngine();
 
-    // 预加载所有媒体资源后才允许进入模式
-    preloadAllResources();
+    // 预加载所有媒体资源（使用 HLS 加载器）
+    if (window.HLSLoader) {
+      window.HLSLoader.preloadAllResourcesHLS();
+    } else {
+      preloadAllResources();
+    }
   }
 
   // ==========================================
-  //  资源预加载系统
+  //  资源预加载系统 (Fallback - 仅在 HLS 加载器不可用时使用)
   // ==========================================
   function preloadAllResources() {
     const progressFill = $('#loading-progress-fill');
@@ -59,108 +63,16 @@
     // 禁用模式卡片点击
     modeCards.forEach(c => c.style.pointerEvents = 'none');
 
-    const resources = [
-      { el: $('#perf-video'), type: 'video', name: '表演视频 (静音)' },
-      { el: $('#prac-video'), type: 'video', name: '练习视频' },
-      { el: $('#perf-audio'), type: 'audio', name: '伴奏音频' },
-    ];
+    // 当 HLS 加载器不可用时，直接放行
+    console.warn('[Preload] HLS loader not available, forcing entry');
+    if (statusText) statusText.textContent = '⚠️ 请稍候...';
+    if (progressFill) progressFill.style.width = '100%';
 
-    let loaded = 0;
-    const total = resources.length;
-    let allReady = false;
-
-    function updateProgress() {
-      const pct = Math.round((loaded / total) * 100);
-      if (progressFill) progressFill.style.width = pct + '%';
-      if (progressText) progressText.textContent = `${loaded}/${total} 资源已加载 (${pct}%)`;
-    }
-
-    function checkAllLoaded() {
-      if (allReady) return;
-      if (loaded >= total) {
-        allReady = true;
-        if (statusText) statusText.textContent = '✅ 资源加载完成！';
-        if (progressFill) progressFill.style.width = '100%';
-        // 启用模式卡片
-        modeCards.forEach(c => c.style.pointerEvents = '');
-        setTimeout(() => {
-          loadingOverlay.classList.add('hidden');
-          setTimeout(() => loadingOverlay.style.display = 'none', 600);
-        }, 500);
-      }
-    }
-
-    // 设置超时（30秒后强制放行，避免永远卡住）
-    const forceTimer = setTimeout(() => {
-      if (!allReady) {
-        console.warn('Resource loading timed out, forcing entry.');
-        allReady = true;
-        loaded = total;
-        updateProgress();
-        if (statusText) statusText.textContent = '⚠️ 部分资源仍在加载...';
-        modeCards.forEach(c => c.style.pointerEvents = '');
-        setTimeout(() => {
-          loadingOverlay.classList.add('hidden');
-          setTimeout(() => loadingOverlay.style.display = 'none', 600);
-        }, 500);
-      }
-    }, 30000);
-
-    resources.forEach((res) => {
-      if (!res.el) { loaded++; updateProgress(); checkAllLoaded(); return; }
-
-      const el = res.el;
-
-      // 检查是否已经可以播放
-      if (el.readyState >= 3) { // HAVE_FUTURE_DATA
-        loaded++;
-        if (statusText) statusText.textContent = `✓ ${res.name} 已就绪`;
-        updateProgress();
-        checkAllLoaded();
-        return;
-      }
-
-      function onCanPlay() {
-        el.removeEventListener('canplaythrough', onCanPlay);
-        el.removeEventListener('error', onError);
-        loaded++;
-        if (statusText) statusText.textContent = `✓ ${res.name} 加载完成`;
-        updateProgress();
-        checkAllLoaded();
-      }
-
-      function onError() {
-        el.removeEventListener('canplaythrough', onCanPlay);
-        el.removeEventListener('error', onError);
-        loaded++;
-        console.warn(`Failed to load: ${res.name}`);
-        if (statusText) statusText.textContent = `⚠ ${res.name} 加载失败`;
-        updateProgress();
-        checkAllLoaded();
-      }
-
-      // 使用 canplaythrough 确保可以流畅播放
-      el.addEventListener('canplaythrough', onCanPlay, { once: true });
-      el.addEventListener('error', onError, { once: true });
-
-      // 对于视频，监听 progress 事件来显示下载进度
-      if (res.type === 'video') {
-        el.addEventListener('progress', () => {
-          if (el.buffered.length > 0 && el.duration > 0) {
-            const buffered = el.buffered.end(el.buffered.length - 1);
-            const bufPct = Math.round((buffered / el.duration) * 100);
-            if (statusText && !allReady) {
-              statusText.textContent = `⏳ ${res.name} 缓冲中 ${bufPct}%...`;
-            }
-          }
-        });
-      }
-
-      // 强制开始加载
-      el.load();
-    });
-
-    updateProgress();
+    modeCards.forEach(c => c.style.pointerEvents = '');
+    setTimeout(() => {
+      loadingOverlay.classList.add('hidden');
+      setTimeout(() => loadingOverlay.style.display = 'none', 600);
+    }, 1000);
   }
 
   // ==========================================

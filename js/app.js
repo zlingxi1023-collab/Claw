@@ -53,6 +53,7 @@
 
   // ==========================================
   //  资源预加载系统 (Fallback - 仅在 HLS 加载器不可用时使用)
+  //  即使 fallback 模式也必须等待媒体文件可用后才放行
   // ==========================================
   function preloadAllResources() {
     const progressFill = $('#loading-progress-fill');
@@ -63,16 +64,50 @@
     // 禁用模式卡片点击
     modeCards.forEach(c => c.style.pointerEvents = 'none');
 
-    // 当 HLS 加载器不可用时，直接放行
-    console.warn('[Preload] HLS loader not available, forcing entry');
-    if (statusText) statusText.textContent = '⚠️ 请稍候...';
-    if (progressFill) progressFill.style.width = '100%';
+    if (statusText) statusText.textContent = '⏳ 正在加载媒体文件...';
 
-    modeCards.forEach(c => c.style.pointerEvents = '');
-    setTimeout(() => {
-      loadingOverlay.classList.add('hidden');
-      setTimeout(() => loadingOverlay.style.display = 'none', 600);
-    }, 1000);
+    // 即使没有 HLS 加载器，也要确保 fallback 媒体文件可以加载
+    const mediaSources = [
+      'media/six-little-ducks-video-muted.mp4',
+      'media/six-little-ducks-video.mp4',
+      'media/six-little-ducks-instrumental-extracted.mp3'
+    ];
+
+    let loadedCount = 0;
+    const totalCount = mediaSources.length;
+
+    function checkAllLoaded() {
+      loadedCount++;
+      const pct = Math.round((loadedCount / totalCount) * 100);
+      if (progressFill) progressFill.style.width = pct + '%';
+      if (progressText) progressText.textContent = loadedCount + '/' + totalCount + ' (' + pct + '%)';
+
+      if (loadedCount >= totalCount) {
+        if (statusText) statusText.textContent = '✅ 加载完成！';
+        modeCards.forEach(c => c.style.pointerEvents = '');
+        setTimeout(() => {
+          loadingOverlay.classList.add('hidden');
+          setTimeout(() => loadingOverlay.style.display = 'none', 600);
+        }, 500);
+      }
+    }
+
+    // 用 HEAD 请求验证每个文件可访问
+    mediaSources.forEach(url => {
+      fetch(url, { method: 'HEAD' })
+        .then(resp => {
+          if (resp.ok) {
+            console.log('[Fallback] ✓ Accessible: ' + url);
+          } else {
+            console.warn('[Fallback] ✗ Not accessible: ' + url + ' (HTTP ' + resp.status + ')');
+          }
+          checkAllLoaded();
+        })
+        .catch(err => {
+          console.warn('[Fallback] ✗ Error checking: ' + url, err);
+          checkAllLoaded();
+        });
+    });
   }
 
   // ==========================================

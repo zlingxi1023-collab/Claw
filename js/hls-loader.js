@@ -1,16 +1,13 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v2
+ * Six Little Ducks - HLS 媒体加载器 v3
  * 
- * 核心策略：预加载时用 fetch() 完整下载所有媒体文件到浏览器缓存，
- * 确保用户进入练习/表演模式前所有数据已在本地，播放零卡顿。
+ * 核心原则：所有媒体文件完全下载完成后才允许进入！
  * 
- * HLS 使用 single_file 模式（一个 ts + byte-range m3u8），
- * 所以只需下载 3 个 ts 文件 + 3 个 m3u8 文件。
- * 
- * iOS 兼容方案：
- * - iOS Safari 原生支持 HLS m3u8，预下载 ts 后浏览器会命中缓存
- * - 非 iOS 浏览器使用 hls.js polyfill，同样命中预下载的缓存
- * - 首次用户触摸/点击时解锁音视频播放权限
+ * - 预加载时用 fetch() 完整下载所有媒体文件
+ * - 下载失败自动重试（最多3次），仍失败则降级到 fallback 源
+ * - 没有超时强制跳过机制 — 必须下载完才能进入
+ * - 提供手动重试按钮，用户可随时触发重新下载
+ * - Loading 遮罩在所有文件就绪前绝不消失
  */
 
 (function () {
@@ -25,7 +22,7 @@
   const isIOSSafari = isIOS;
 
   // ==========================================
-  //  HLS 源配置（single_file 模式：每种媒体 1 个 ts + 1 个 m3u8）
+  //  HLS 源配置
   // ==========================================
   const HLS_SOURCES = {
     'perf-video': {
@@ -59,13 +56,10 @@
   let hlsJsLoading = false;
   const hlsJsCallbacks = [];
 
-  /**
-   * 动态加载 hls.js CDN
-   */
   function loadHlsJs() {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (hlsJsLoaded) { resolve(); return; }
-      hlsJsCallbacks.push(resolve);
+      hlsJsCallbacks.push({ resolve, reject });
       if (hlsJsLoading) return;
       hlsJsLoading = true;
 
@@ -75,77 +69,96 @@
         hlsJsLoaded = true;
         hlsJsLoading = false;
         console.log('[HLS] hls.js loaded successfully');
-        hlsJsCallbacks.forEach(cb => cb());
+        hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
       script.onerror = function () {
         hlsJsLoading = false;
-        console.warn('[HLS] Failed to load hls.js');
-        hlsJsCallbacks.forEach(cb => cb());
+        console.warn('[HLS] Failed to load hls.js from CDN');
+        // hls.js 加载失败不是致命错误，会降级到 fallback
+        hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
       document.head.appendChild(script);
     });
   }
 
+  // ==========================================
+  //  带进度的 fetch 下载（含重试逻辑）
+  // ==========================================
+
   /**
-   * 用 fetch 下载一个文件，返回进度回调
-   * @param {string} url - 文件 URL
-   * @param {Function} onProgress - 进度回调 (loaded, total)
-   * @returns {Promise<Response>}
+   * 下载单个文件，失败自动重试
+   * @param {string} url
+   * @param {Function} onProgress - (loaded, total) 回调
+   * @param {number} maxRetries - 最大重试次数
+   * @returns {Promise<Blob>}
    */
-  function fetchWithProgress(url, onProgress) {
-    return fetch(url).then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
-      
-      const contentLength = response.headers.get('Content-Length');
-      const total = contentLength ? parseInt(contentLength, 10) : 0;
-      
-      if (!total || !response.body) {
-        // Content-Length 不可用或不支持 ReadableStream，直接返回
-        return response.blob().then(blob => {
-          if (onProgress) onProgress(blob.size, blob.size);
-          return blob;
-        });
-      }
+  function fetchWithRetry(url, onProgress, maxRetries) {
+    maxRetries = maxRetries || 3;
+    let attempt = 0;
 
-      // 用 ReadableStream 跟踪下载进度
-      const reader = response.body.getReader();
-      let loaded = 0;
-      const chunks = [];
+    function tryFetch() {
+      attempt++;
+      return fetch(url).then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status + ' for ' + url);
 
-      return new Promise((resolve, reject) => {
-        function pump() {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              const blob = new Blob(chunks);
-              resolve(blob);
-              return;
-            }
-            chunks.push(value);
-            loaded += value.length;
-            if (onProgress) onProgress(loaded, total);
-            pump();
-          }).catch(reject);
+        var contentLength = response.headers.get('Content-Length');
+        var total = contentLength ? parseInt(contentLength, 10) : 0;
+
+        if (!total || !response.body) {
+          return response.blob().then(function (blob) {
+            if (onProgress) onProgress(blob.size, blob.size);
+            return blob;
+          });
         }
-        pump();
+
+        var reader = response.body.getReader();
+        var loaded = 0;
+        var chunks = [];
+
+        return new Promise(function (resolve, reject) {
+          function pump() {
+            reader.read().then(function (result) {
+              if (result.done) {
+                resolve(new Blob(chunks));
+                return;
+              }
+              chunks.push(result.value);
+              loaded += result.value.length;
+              if (onProgress) onProgress(loaded, total);
+              pump();
+            }).catch(reject);
+          }
+          pump();
+        });
+      }).catch(function (err) {
+        if (attempt < maxRetries) {
+          console.warn('[HLS] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
+          // 等待后重试，指数退避
+          return new Promise(function (resolve) {
+            setTimeout(resolve, 1000 * attempt);
+          }).then(tryFetch);
+        }
+        throw err;
       });
-    });
+    }
+
+    return tryFetch();
   }
 
-  /**
-   * 为一个 media 元素配置 HLS 源
-   * 前提：ts 文件已经被预下载到浏览器缓存
-   */
+  // ==========================================
+  //  为媒体元素配置 HLS 源
+  // ==========================================
   function setupHLS(elementId, onReady, onError) {
-    const config = HLS_SOURCES[elementId];
+    var config = HLS_SOURCES[elementId];
     if (!config) {
       console.warn('[HLS] Unknown element:', elementId);
       if (onError) onError();
       return;
     }
 
-    const el = document.getElementById(elementId);
+    var el = document.getElementById(elementId);
     if (!el) {
       console.warn('[HLS] Element not found:', elementId);
       if (onError) onError();
@@ -154,22 +167,30 @@
 
     // iOS Safari 原生支持 HLS
     if (isIOSSafari || el.canPlayType('application/vnd.apple.mpegurl')) {
-      console.log(`[HLS] ${elementId}: Using native HLS support`);
+      console.log('[HLS] ' + elementId + ': Using native HLS');
       el.src = config.hls;
 
-      const onLoaded = function () {
+      var onLoaded = function () {
         el.removeEventListener('loadedmetadata', onLoaded);
         el.removeEventListener('error', onErr);
-        console.log(`[HLS] ${elementId}: Ready (native HLS)`);
+        console.log('[HLS] ' + elementId + ': Ready (native)');
         if (onReady) onReady();
       };
-      const onErr = function () {
+      var onErr = function () {
         el.removeEventListener('loadedmetadata', onLoaded);
         el.removeEventListener('error', onErr);
-        console.warn(`[HLS] ${elementId}: Native HLS failed, using fallback`);
+        console.warn('[HLS] ' + elementId + ': Native failed, using fallback');
         el.src = config.fallback;
         el.load();
-        if (onReady) onReady();
+        // 等 fallback 加载完再报 ready
+        el.addEventListener('loadedmetadata', function onFallbackReady() {
+          el.removeEventListener('loadedmetadata', onFallbackReady);
+          if (onReady) onReady();
+        });
+        el.addEventListener('error', function onFallbackErr() {
+          el.removeEventListener('error', onFallbackErr);
+          if (onReady) onReady(); // 即使失败也要推进流程
+        });
       };
 
       el.addEventListener('loadedmetadata', onLoaded);
@@ -180,16 +201,16 @@
 
     // 非 iOS：使用 hls.js
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      console.log(`[HLS] ${elementId}: Using hls.js polyfill`);
+      console.log('[HLS] ' + elementId + ': Using hls.js');
 
       if (hlsInstances[elementId]) {
         hlsInstances[elementId].destroy();
       }
 
-      const hls = new Hls({
-        maxBufferLength: 120,      // 尽可能多地缓冲
-        maxMaxBufferLength: 300,   // 允许缓冲整个文件
-        maxBufferSize: 200 * 1024 * 1024,  // 200MB 缓冲区
+      var hls = new Hls({
+        maxBufferLength: 120,
+        maxMaxBufferLength: 300,
+        maxBufferSize: 200 * 1024 * 1024,
         startPosition: 0,
         debug: false
       });
@@ -198,13 +219,13 @@
       hls.attachMedia(el);
 
       hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        console.log(`[HLS] ${elementId}: Manifest parsed (hls.js)`);
+        console.log('[HLS] ' + elementId + ': Manifest parsed');
         if (onReady) onReady();
       });
 
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
-          console.warn(`[HLS] ${elementId}: Fatal hls.js error, using fallback`);
+          console.warn('[HLS] ' + elementId + ': Fatal error, using fallback');
           hls.destroy();
           delete hlsInstances[elementId];
           el.src = config.fallback;
@@ -215,8 +236,8 @@
 
       hlsInstances[elementId] = hls;
     } else {
-      // 极端降级：直接用原始文件
-      console.log(`[HLS] ${elementId}: No HLS support, using fallback`);
+      // 极端降级
+      console.log('[HLS] ' + elementId + ': No HLS support, using fallback');
       el.src = config.fallback;
       el.load();
       if (onReady) onReady();
@@ -226,12 +247,12 @@
   // ==========================================
   //  iOS 媒体解锁
   // ==========================================
-  let mediaUnlocked = false;
+  var mediaUnlocked = false;
 
   function unlockMediaOnInteraction() {
     if (mediaUnlocked) return;
 
-    const unlock = function () {
+    var unlock = function () {
       if (mediaUnlocked) return;
       mediaUnlocked = true;
       console.log('[HLS] User interaction detected, unlocking media');
@@ -240,15 +261,14 @@
       document.removeEventListener('touchend', unlock, true);
       document.removeEventListener('click', unlock, true);
 
-      const mediaElements = document.querySelectorAll('audio, video');
-      mediaElements.forEach(el => {
-        const playPromise = el.play();
+      var mediaElements = document.querySelectorAll('audio, video');
+      mediaElements.forEach(function (el) {
+        var playPromise = el.play();
         if (playPromise !== undefined) {
-          playPromise.then(() => {
+          playPromise.then(function () {
             el.pause();
             el.currentTime = 0;
-            console.log(`[HLS] Unlocked: ${el.id || el.tagName}`);
-          }).catch(() => {});
+          }).catch(function () {});
         }
       });
     };
@@ -259,170 +279,208 @@
   }
 
   // ==========================================
-  //  预加载系统 v2：完整下载所有文件后才放行
+  //  预加载系统 v3：严格模式 — 全部下载完才放行
   // ==========================================
 
-  /**
-   * 预加载所有媒体资源 — 确保所有 ts+m3u8 文件完整下载后才允许进入
-   * 
-   * 流程：
-   * 1. 先下载 hls.js（非 iOS）
-   * 2. 并行 fetch 下载所有 ts 文件（有进度条）
-   * 3. 同时下载所有 m3u8 文件
-   * 4. 全部下载完成后，配置各媒体元素的 HLS 源
-   * 5. 等待所有媒体元素 ready 后，解除加载遮罩
-   */
-  function preloadAllResourcesHLS() {
-    const progressFill = document.querySelector('#loading-progress-fill');
-    const progressText = document.querySelector('#loading-progress-text');
-    const statusText = document.querySelector('#loading-status');
-    const modeCards = document.querySelectorAll('.mode-card');
+  // 全局状态
+  var loadingComplete = false;
+  var isRetrying = false;
 
-    // 禁用模式卡片
-    modeCards.forEach(c => c.style.pointerEvents = 'none');
+  function preloadAllResourcesHLS() {
+    var progressFill = document.querySelector('#loading-progress-fill');
+    var progressText = document.querySelector('#loading-progress-text');
+    var statusText = document.querySelector('#loading-status');
+    var loadingOverlay = document.querySelector('#loading');
+    var modeCards = document.querySelectorAll('.mode-card');
+
+    // 确保 loading 遮罩可见且阻止交互
+    if (loadingOverlay) {
+      loadingOverlay.style.display = '';
+      loadingOverlay.classList.remove('hidden');
+    }
+    modeCards.forEach(function (c) { c.style.pointerEvents = 'none'; });
 
     // 开始 iOS 媒体解锁监听
     unlockMediaOnInteraction();
 
-    const resourceIds = Object.keys(HLS_SOURCES);
+    // 注入重试按钮（只注入一次）
+    ensureRetryButton();
+
+    var resourceIds = Object.keys(HLS_SOURCES);
 
     // 收集所有需要下载的文件
-    const downloads = [];
-    resourceIds.forEach(id => {
-      const config = HLS_SOURCES[id];
+    var downloads = [];
+    resourceIds.forEach(function (id) {
+      var config = HLS_SOURCES[id];
       downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
       downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
     });
 
-    // 进度跟踪
-    const progressMap = {};  // url -> { loaded, total }
-    let totalBytes = 0;
-    let loadedBytes = 0;
-    let filesCompleted = 0;
-    const totalFiles = downloads.length;
+    var totalFiles = downloads.length;
+    var successCount = 0;
+    var failedDownloads = [];
+    var progressMap = {};
 
     function updateProgressUI() {
-      // 按文件数计算百分比（更可靠，因为 Content-Length 可能不可用）
-      const pct = Math.round((filesCompleted / totalFiles) * 100);
+      var pct = Math.round((successCount / totalFiles) * 100);
       if (progressFill) progressFill.style.width = pct + '%';
       if (progressText) {
-        progressText.textContent = `${filesCompleted}/${totalFiles} 文件已下载 (${pct}%)`;
+        progressText.textContent = successCount + '/' + totalFiles + ' 文件已下载 (' + pct + '%)';
       }
     }
 
     function updateDetailProgress(url, loaded, total) {
-      progressMap[url] = { loaded, total };
-      // 计算总字节进度
-      let tl = 0, tt = 0;
-      Object.values(progressMap).forEach(p => {
-        tl += p.loaded;
-        tt += p.total;
-      });
-      loadedBytes = tl;
-      totalBytes = tt;
-
-      if (totalBytes > 0 && statusText) {
-        const mbLoaded = (loadedBytes / 1024 / 1024).toFixed(1);
-        const mbTotal = (totalBytes / 1024 / 1024).toFixed(1);
-        statusText.textContent = `⏳ 正在下载媒体文件 ${mbLoaded}/${mbTotal} MB...`;
+      progressMap[url] = { loaded: loaded, total: total };
+      var tl = 0, tt = 0;
+      var keys = Object.keys(progressMap);
+      for (var i = 0; i < keys.length; i++) {
+        tl += progressMap[keys[i]].loaded;
+        tt += progressMap[keys[i]].total;
       }
-    }
-
-    // 超时保护（90 秒 — 需要下载约 160MB）
-    let allReady = false;
-    const forceTimer = setTimeout(() => {
-      if (!allReady) {
-        console.warn('[HLS] Download timeout (90s), forcing entry');
-        finishLoading('⚠️ 部分资源可能仍在加载，播放时可能短暂缓冲...');
+      if (tt > 0 && statusText) {
+        var mbLoaded = (tl / 1024 / 1024).toFixed(1);
+        var mbTotal = (tt / 1024 / 1024).toFixed(1);
+        statusText.textContent = '⏳ 正在下载媒体文件 ' + mbLoaded + '/' + mbTotal + ' MB...';
       }
-    }, 90000);
-
-    function finishLoading(message) {
-      if (allReady) return;
-      allReady = true;
-      clearTimeout(forceTimer);
-
-      if (statusText) statusText.textContent = message || '✅ 所有资源下载完成！';
-      if (progressFill) progressFill.style.width = '100%';
-      if (progressText) progressText.textContent = `${totalFiles}/${totalFiles} 文件已下载 (100%)`;
-
-      modeCards.forEach(c => c.style.pointerEvents = '');
-      setTimeout(() => {
-        const overlay = document.querySelector('#loading');
-        if (overlay) {
-          overlay.classList.add('hidden');
-          setTimeout(() => overlay.style.display = 'none', 600);
-        }
-      }, 600);
     }
 
     if (statusText) statusText.textContent = '⏳ 正在下载媒体文件...';
     updateProgressUI();
+    hideRetryButton();
 
     // 第 1 步：非 iOS 先加载 hls.js
-    const hlsJsReady = isIOSSafari ? Promise.resolve() : loadHlsJs();
+    var hlsJsReady = isIOSSafari ? Promise.resolve() : loadHlsJs();
 
-    // 第 2 步：并行下载所有文件（ts + m3u8）
-    const downloadPromises = downloads.map(dl => {
-      return fetchWithProgress(dl.url, (loaded, total) => {
+    // 第 2 步：并行下载所有文件（每个文件有3次重试机会）
+    var downloadPromises = downloads.map(function (dl) {
+      return fetchWithRetry(dl.url, function (loaded, total) {
         updateDetailProgress(dl.url, loaded, total);
-      }).then(blob => {
-        filesCompleted++;
-        console.log(`[HLS] Downloaded: ${dl.url} (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+      }, 3).then(function (blob) {
+        successCount++;
+        console.log('[HLS] ✓ Downloaded: ' + dl.url + ' (' + (blob.size / 1024 / 1024).toFixed(1) + ' MB)');
         updateProgressUI();
-        return { ...dl, blob };
-      }).catch(err => {
-        filesCompleted++;
-        console.warn(`[HLS] Download failed: ${dl.url}`, err);
-        updateProgressUI();
-        return { ...dl, error: err };
+        return { id: dl.id, url: dl.url, type: dl.type, name: dl.name, blob: blob, success: true };
+      }).catch(function (err) {
+        console.error('[HLS] ✗ Failed after retries: ' + dl.url, err.message);
+        failedDownloads.push(dl);
+        return { id: dl.id, url: dl.url, type: dl.type, name: dl.name, error: err, success: false };
       });
     });
 
-    // 第 3 步：等待所有下载 + hls.js 加载完成
-    Promise.all([hlsJsReady, ...downloadPromises]).then(results => {
-      if (allReady) return;  // 已超时跳过
+    // 第 3 步：等所有下载完成
+    Promise.all([hlsJsReady].concat(downloadPromises)).then(function (results) {
+      if (loadingComplete) return;
 
-      const downloadResults = results.slice(1);
-      const failedCount = downloadResults.filter(r => r.error).length;
+      var downloadResults = results.slice(1);
+      var allSuccess = failedDownloads.length === 0;
 
-      if (failedCount > 0) {
-        console.warn(`[HLS] ${failedCount}/${totalFiles} downloads failed`);
+      if (!allSuccess) {
+        // 有文件下载失败 — 不进入，显示错误和重试按钮
+        var failedNames = failedDownloads.map(function (d) { return d.name + '(' + d.type + ')'; });
+        if (statusText) {
+          statusText.textContent = '❌ ' + failedDownloads.length + ' 个文件下载失败: ' + failedNames.join(', ');
+        }
+        if (progressText) {
+          progressText.textContent = successCount + '/' + totalFiles + ' 文件已下载';
+        }
+        showRetryButton();
+        console.error('[HLS] ' + failedDownloads.length + ' files failed. NOT entering app.');
+        return; // 不进入！等用户点重试
       }
 
+      // 所有文件下载成功！进入播放器初始化
       if (statusText) statusText.textContent = '⏳ 正在初始化播放器...';
 
-      // 第 4 步：配置各媒体元素的 HLS 源
-      let setupCompleted = 0;
-      const totalSetups = resourceIds.length;
+      var setupCompleted = 0;
+      var totalSetups = resourceIds.length;
 
-      resourceIds.forEach(id => {
+      resourceIds.forEach(function (id) {
         setupHLS(id,
           function onReady() {
             setupCompleted++;
-            console.log(`[HLS] ${id}: Player ready (${setupCompleted}/${totalSetups})`);
+            console.log('[HLS] ' + id + ': Player ready (' + setupCompleted + '/' + totalSetups + ')');
             if (setupCompleted >= totalSetups) {
-              finishLoading('✅ 所有资源下载完成！可以开始了');
+              finishLoading();
             }
           },
           function onError() {
             setupCompleted++;
-            console.warn(`[HLS] ${id}: Setup failed`);
+            console.warn('[HLS] ' + id + ': Setup failed, but file downloaded');
             if (setupCompleted >= totalSetups) {
-              finishLoading('⚠️ 部分资源加载失败，但可以尝试播放');
+              finishLoading();
             }
           }
         );
       });
 
-      // 播放器初始化超时（10 秒）
-      setTimeout(() => {
-        if (!allReady) {
-          console.warn('[HLS] Player init timeout, forcing entry');
-          finishLoading('✅ 资源已下载，播放器准备就绪');
+      // 播放器初始化保护（30秒） — 如果 hls.js 解析很慢
+      setTimeout(function () {
+        if (!loadingComplete && setupCompleted >= totalSetups - 1) {
+          // 大部分已就绪，可以进入
+          console.warn('[HLS] Player init slow, but most ready. Entering.');
+          finishLoading();
         }
-      }, 10000);
+      }, 30000);
     });
+
+    function finishLoading() {
+      if (loadingComplete) return;
+      loadingComplete = true;
+
+      console.log('[HLS] ✅ All resources downloaded and players ready. Entering app!');
+
+      if (statusText) statusText.textContent = '✅ 所有资源下载完成！';
+      if (progressFill) progressFill.style.width = '100%';
+      if (progressText) progressText.textContent = totalFiles + '/' + totalFiles + ' 文件已下载 (100%)';
+      hideRetryButton();
+
+      // 恢复模式卡片交互
+      modeCards.forEach(function (c) { c.style.pointerEvents = ''; });
+
+      // 延迟淡出 loading 遮罩
+      setTimeout(function () {
+        if (loadingOverlay) {
+          loadingOverlay.classList.add('hidden');
+          setTimeout(function () {
+            loadingOverlay.style.display = 'none';
+          }, 600);
+        }
+      }, 500);
+    }
+  }
+
+  // ==========================================
+  //  重试按钮管理
+  // ==========================================
+  function ensureRetryButton() {
+    if (document.querySelector('#loading-retry-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'loading-retry-btn';
+    btn.textContent = '🔄 重新下载';
+    btn.style.cssText = 'display:none; margin-top:16px; padding:10px 28px; font-size:1rem; font-weight:700; color:#fff; background:linear-gradient(135deg,#FF6B6B,#4ECDC4); border:none; border-radius:30px; cursor:pointer; transition:transform 0.2s,box-shadow 0.2s; box-shadow:0 4px 15px rgba(78,205,196,0.3);';
+    btn.addEventListener('mouseenter', function () { btn.style.transform = 'scale(1.05)'; });
+    btn.addEventListener('mouseleave', function () { btn.style.transform = 'scale(1)'; });
+    btn.addEventListener('click', function () {
+      if (isRetrying) return;
+      isRetrying = true;
+      loadingComplete = false;
+      // 重新开始完整预加载流程
+      preloadAllResourcesHLS();
+      isRetrying = false;
+    });
+
+    var container = document.querySelector('#loading');
+    if (container) container.appendChild(btn);
+  }
+
+  function showRetryButton() {
+    var btn = document.querySelector('#loading-retry-btn');
+    if (btn) btn.style.display = '';
+  }
+
+  function hideRetryButton() {
+    var btn = document.querySelector('#loading-retry-btn');
+    if (btn) btn.style.display = 'none';
   }
 
   // ==========================================
@@ -436,7 +494,7 @@
   }
 
   function destroyAllHLS() {
-    Object.keys(hlsInstances).forEach(id => {
+    Object.keys(hlsInstances).forEach(function (id) {
       hlsInstances[id].destroy();
       delete hlsInstances[id];
     });

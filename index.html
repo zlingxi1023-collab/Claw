@@ -78,11 +78,7 @@
       <div class="toolbar-role-picker" id="perf-toolbar-role-picker">
         <!-- JS动态生成小号角色圆点 -->
       </div>
-      <!-- 视图切换标签 -->
-      <div class="toolbar-view-tabs">
-        <button class="view-tab active" id="perf-tab-lyrics" data-view="lyrics">📝 歌词</button>
-        <button class="view-tab" id="perf-tab-choreo" data-view="choreo">💃 编排</button>
-      </div>
+      <!-- 视图切换标签已移除，歌词和队形同时展示 -->
       <button class="toolbar-btn toolbar-switch" id="perf-switch-mode">练习模式 →</button>
     </div>
 
@@ -120,8 +116,8 @@
 
       <!-- 右侧面板容器 -->
       <div class="right-panel-container">
-        <!-- 歌词面板（默认显示） -->
-        <div class="lyrics-panel" id="perf-lyrics-panel-view">
+        <!-- 上部：歌词面板 -->
+        <div class="lyrics-section perf-lyrics-section" id="perf-lyrics-panel-view">
           <div class="lyrics-panel-header">
             <span>📝 歌词</span>
             <span class="lyrics-section-tag" id="perf-section">Ready</span>
@@ -131,13 +127,16 @@
           </div>
         </div>
 
-        <!-- 动作编排面板（切换显示） -->
-        <div class="choreo-panel" id="perf-choreo-panel-view" style="display:none">
+        <!-- 分隔线 -->
+        <div class="panel-divider"></div>
+
+        <!-- 下部：队形可视化面板 -->
+        <div class="perf-formation-section" id="perf-formation-panel">
           <div class="choreo-panel-header">
-            <span>💃 动作编排</span>
+            <span>🎭 舞台队形</span>
             <span class="choreo-section-tag" id="perf-choreo-section-tag">Ready</span>
           </div>
-          
+
           <!-- 当前动作提示 -->
           <div class="current-action-card" id="perf-current-action-card">
             <div class="action-label">当前动作</div>
@@ -147,19 +146,14 @@
           <!-- 队形可视化 -->
           <div class="formation-area">
             <div class="formation-header">
-              <span class="formation-title" id="perf-formation-title">队形图</span>
+              <span class="formation-title" id="perf-formation-title">📍 队形图</span>
               <span class="formation-desc" id="perf-formation-desc">初始队形</span>
             </div>
-            <div class="formation-stage" id="perf-formation-stage">
-              <!-- JS动态绘制SVG队形图 -->
-              <div class="stage-label stage-label-front">前台 (观众)</div>
+            <div class="formation-stage perf-formation-stage-large" id="perf-formation-stage">
+              <!-- JS动态绘制SVG鸭子队形图 -->
+              <div class="stage-label stage-label-front">🎪 前台 (观众)</div>
               <div class="stage-label stage-label-back">后台</div>
             </div>
-          </div>
-
-          <!-- 动作时间轴列表 -->
-          <div class="action-timeline" id="perf-action-timeline">
-            <!-- JS 动态渲染动作列表 -->
           </div>
         </div>
       </div>

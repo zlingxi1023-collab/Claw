@@ -626,15 +626,15 @@
     const stage = $('#perf-formation-stage');
     if (!stage) return;
     // 清除旧的鸭子
-    stage.querySelectorAll('.formation-duck').forEach(el => el.remove());
+    stage.querySelectorAll('.formation-duck-svg').forEach(el => el.remove());
 
     Object.entries(DUCK_ROLES).forEach(([key, role]) => {
       const duck = document.createElement('div');
-      duck.className = 'formation-duck perf-formation-duck-item';
+      duck.className = 'formation-duck-svg perf-formation-duck-item';
       duck.dataset.role = key;
-      duck.innerHTML = `<div class="duck-dot" style="background:${role.color};color:${role.color}" data-label="${role.label}">
-        ${role.label.charAt(0)}
-      </div>`;
+      duck.style.color = role.color;
+      duck.innerHTML = `<div class="duck-svg-wrap">${createDuckSVG(key, 40)}</div>
+        <span class="duck-label">${role.label}</span>`;
       stage.appendChild(duck);
     });
 
@@ -660,8 +660,8 @@
       const role = el.dataset.role;
       const pos = formationData.positions[role];
       if (pos) {
-        el.style.left = `calc(${pos.x}% - 18px)`;
-        el.style.top = `calc(${pos.y}% - 18px)`;
+        el.style.left = `calc(${pos.x}% - 24px)`;
+        el.style.top = `calc(${pos.y}% - 24px)`;
       }
 
       el.classList.remove('singing', 'my-duck');
@@ -1041,14 +1041,14 @@
     const stage = $('#formation-stage');
     if (!stage) return;
 
-    // 创建6只鸭子的DOM节点
+    // 创建6只鸭子的DOM节点（SVG鸭子图像）
     Object.entries(DUCK_ROLES).forEach(([key, role]) => {
       const duck = document.createElement('div');
-      duck.className = 'formation-duck';
+      duck.className = 'formation-duck-svg';
       duck.dataset.role = key;
-      duck.innerHTML = `<div class="duck-dot" style="background:${role.color};color:${role.color}" data-label="${role.label}">
-        ${role.label.charAt(0)}
-      </div>`;
+      duck.style.color = role.color;
+      duck.innerHTML = `<div class="duck-svg-wrap">${createDuckSVG(key, 36)}</div>
+        <span class="duck-label">${role.label}</span>`;
       stage.appendChild(duck);
     });
 
@@ -1071,12 +1071,12 @@
     if (descEl) descEl.textContent = formationData.desc;
 
     // 只更新练习模式队形面板中的鸭子
-    stage.querySelectorAll('.formation-duck').forEach(el => {
+    stage.querySelectorAll('.formation-duck-svg').forEach(el => {
       const role = el.dataset.role;
       const pos = formationData.positions[role];
       if (pos) {
-        el.style.left = `calc(${pos.x}% - 18px)`;
-        el.style.top = `calc(${pos.y}% - 18px)`;
+        el.style.left = `calc(${pos.x}% - 20px)`;
+        el.style.top = `calc(${pos.y}% - 20px)`;
       }
 
       el.classList.remove('singing', 'my-duck');
@@ -1096,7 +1096,7 @@
   function updateFormationSingers(lyricLine) {
     const stage = $('#formation-stage');
     if (!stage) return;
-    stage.querySelectorAll('.formation-duck').forEach(el => {
+    stage.querySelectorAll('.formation-duck-svg').forEach(el => {
       const role = el.dataset.role;
       el.classList.remove('singing');
       if (lyricLine && lyricLine.singers.includes(role)) {

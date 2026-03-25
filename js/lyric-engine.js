@@ -58,12 +58,27 @@ class LyricEngine {
 
   seek(time) {
     if (!this.mediaElement) return;
-    this.mediaElement.currentTime = Math.max(0, Math.min(time, this.getDuration()));
+    var targetTime = Math.max(0, Math.min(time, this.getDuration()));
+    this.mediaElement.currentTime = targetTime;
+
+    // iOS Safari 有时 seek 会静默失败，添加验证重试
+    var self = this;
+    var el = this.mediaElement;
+    setTimeout(function () {
+      if (Math.abs(el.currentTime - targetTime) > 1) {
+        console.warn('[LyricEngine] Seek verify failed, retrying. target=' + targetTime + ' actual=' + el.currentTime);
+        el.currentTime = targetTime;
+      }
+    }, 300);
   }
 
   seekToLine(index) {
     if (index >= 0 && index < LYRICS_DATA.length) {
       this.seek(LYRICS_DATA[index].startTime);
+      // 立即更新歌词 UI，不等 seeked 事件（iOS 可能延迟触发）
+      this.currentIndex = -1; // 强制触发变更
+      var self = this;
+      setTimeout(function () { self._updateCurrentLine(); }, 100);
     }
   }
 
@@ -126,9 +141,13 @@ class LyricEngine {
 
   _checkLoop() {
     if (this.hasLoop()) {
-      const t = this.getCurrentTime();
+      var t = this.getCurrentTime();
       if (t >= this.loopB) {
         this.seek(this.loopA);
+        // 强制更新歌词行到循环起点
+        this.currentIndex = -1;
+        var self = this;
+        setTimeout(function () { self._updateCurrentLine(); }, 100);
       }
     }
   }

@@ -259,9 +259,51 @@
       return;
     }
 
-    // iOS Safari 原生支持 HLS — 不预下载 ts，直接流式播放
-    if (isIOSSafari || el.canPlayType('application/vnd.apple.mpegurl')) {
-      console.log('[HLS] ' + elementId + ': Using native HLS (streaming)');
+    // iOS Safari：使用 MP4 fallback 而非原生 HLS
+    // 原因：Safari 原生 HLS（single_file byterange 模式）对 seek 操作支持有缺陷
+    //       未缓冲区域的 seek 会静默失败，导致歌词点击跳转和 AB 循环不工作
+    //       MP4 有完整的 moov atom，Safari 对 MP4 的 seek 支持非常好
+    if (isIOSSafari) {
+      console.log('[HLS] ' + elementId + ': iOS detected, using MP4 fallback for reliable seek');
+      el.src = config.fallback;
+      el.preload = 'auto';
+
+      var iosReady = false;
+      function iosDone() {
+        if (iosReady) return;
+        iosReady = true;
+        el.removeEventListener('loadedmetadata', iosOnMeta);
+        el.removeEventListener('canplay', iosOnCanPlay);
+        el.removeEventListener('error', iosOnErr);
+        console.log('[HLS] ' + elementId + ': Ready (iOS MP4 fallback)');
+        if (onReady) onReady();
+      }
+
+      var iosOnMeta = function () { iosDone(); };
+      var iosOnCanPlay = function () { iosDone(); };
+      var iosOnErr = function () {
+        console.warn('[HLS] ' + elementId + ': iOS MP4 fallback load error');
+        iosDone(); // 即使出错也要放行
+      };
+
+      el.addEventListener('loadedmetadata', iosOnMeta);
+      el.addEventListener('canplay', iosOnCanPlay);
+      el.addEventListener('error', iosOnErr);
+      el.load();
+
+      // 超时保护：20 秒后放行（MP4 流式加载 metadata 通常很快）
+      setTimeout(function () {
+        if (!iosReady) {
+          console.warn('[HLS] ' + elementId + ': iOS MP4 init timeout, proceeding anyway');
+          iosDone();
+        }
+      }, 20000);
+      return;
+    }
+
+    // 非 iOS 但支持原生 HLS（macOS Safari 等）
+    if (el.canPlayType('application/vnd.apple.mpegurl')) {
+      console.log('[HLS] ' + elementId + ': Using native HLS');
       el.src = config.hls;
 
       var nativeReady = false;
@@ -271,7 +313,7 @@
         el.removeEventListener('loadedmetadata', onLoaded);
         el.removeEventListener('canplay', onCanPlay);
         el.removeEventListener('error', onErr);
-        console.log('[HLS] ' + elementId + ': Ready (native)');
+        console.log('[HLS] ' + elementId + ': Ready (native HLS)');
         if (onReady) onReady();
       }
 
@@ -282,7 +324,7 @@
         el.removeEventListener('loadedmetadata', onLoaded);
         el.removeEventListener('canplay', onCanPlay);
         el.removeEventListener('error', onErr);
-        console.warn('[HLS] ' + elementId + ': Native failed, using fallback');
+        console.warn('[HLS] ' + elementId + ': Native HLS failed, using fallback');
         el.src = config.fallback;
         el.load();
         el.addEventListener('loadedmetadata', function onFallbackReady() {
@@ -300,13 +342,12 @@
       el.addEventListener('error', onErr);
       el.load();
 
-      // 超时保护：15 秒后无论 metadata 是否就绪都放行
       setTimeout(function () {
         if (!nativeReady) {
           console.warn('[HLS] ' + elementId + ': Native init timeout, proceeding anyway');
           nativeDone();
         }
-      }, 15000);
+      }, 20000);
       return;
     }
 
@@ -420,15 +461,18 @@
     var resourceIds = Object.keys(HLS_SOURCES);
 
     // 收集所有需要下载的文件
-    // iOS Safari 原生 HLS 会自动下载 ts 文件，预下载是浪费且可能导致缓存冲突
-    // 所以 iOS 只预下载 m3u8 索引文件和非 iOS 的全部文件
+    // iOS 使用 MP4 fallback（seek 更可靠），只需预下载 MP4 文件
+    // 非 iOS 使用 HLS，预下载 ts + m3u8
     var downloads = [];
     resourceIds.forEach(function (id) {
       var config = HLS_SOURCES[id];
-      if (!isIOSSafari) {
+      if (isIOSSafari) {
+        // iOS：预下载 MP4/MP3 fallback 文件
+        downloads.push({ id: id, url: config.fallback, type: 'fallback', name: config.name });
+      } else {
         downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
+        downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
       }
-      downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
     });
 
     var totalFiles = downloads.length;

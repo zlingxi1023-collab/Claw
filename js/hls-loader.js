@@ -259,37 +259,54 @@
       return;
     }
 
-    // iOS Safari 原生支持 HLS
+    // iOS Safari 原生支持 HLS — 不预下载 ts，直接流式播放
     if (isIOSSafari || el.canPlayType('application/vnd.apple.mpegurl')) {
-      console.log('[HLS] ' + elementId + ': Using native HLS');
+      console.log('[HLS] ' + elementId + ': Using native HLS (streaming)');
       el.src = config.hls;
 
-      var onLoaded = function () {
+      var nativeReady = false;
+      function nativeDone() {
+        if (nativeReady) return;
+        nativeReady = true;
         el.removeEventListener('loadedmetadata', onLoaded);
+        el.removeEventListener('canplay', onCanPlay);
         el.removeEventListener('error', onErr);
         console.log('[HLS] ' + elementId + ': Ready (native)');
         if (onReady) onReady();
-      };
+      }
+
+      var onLoaded = function () { nativeDone(); };
+      var onCanPlay = function () { nativeDone(); };
+
       var onErr = function () {
         el.removeEventListener('loadedmetadata', onLoaded);
+        el.removeEventListener('canplay', onCanPlay);
         el.removeEventListener('error', onErr);
         console.warn('[HLS] ' + elementId + ': Native failed, using fallback');
         el.src = config.fallback;
         el.load();
-        // 等 fallback 加载完再报 ready
         el.addEventListener('loadedmetadata', function onFallbackReady() {
           el.removeEventListener('loadedmetadata', onFallbackReady);
-          if (onReady) onReady();
+          nativeDone();
         });
         el.addEventListener('error', function onFallbackErr() {
           el.removeEventListener('error', onFallbackErr);
-          if (onReady) onReady(); // 即使失败也要推进流程
+          nativeDone();
         });
       };
 
       el.addEventListener('loadedmetadata', onLoaded);
+      el.addEventListener('canplay', onCanPlay);
       el.addEventListener('error', onErr);
       el.load();
+
+      // 超时保护：15 秒后无论 metadata 是否就绪都放行
+      setTimeout(function () {
+        if (!nativeReady) {
+          console.warn('[HLS] ' + elementId + ': Native init timeout, proceeding anyway');
+          nativeDone();
+        }
+      }, 15000);
       return;
     }
 
@@ -403,10 +420,14 @@
     var resourceIds = Object.keys(HLS_SOURCES);
 
     // 收集所有需要下载的文件
+    // iOS Safari 原生 HLS 会自动下载 ts 文件，预下载是浪费且可能导致缓存冲突
+    // 所以 iOS 只预下载 m3u8 索引文件和非 iOS 的全部文件
     var downloads = [];
     resourceIds.forEach(function (id) {
       var config = HLS_SOURCES[id];
-      downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
+      if (!isIOSSafari) {
+        downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
+      }
       downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
     });
 
@@ -517,14 +538,14 @@
         );
       });
 
-      // 播放器初始化保护（30秒） — 如果 hls.js 解析很慢
+      // 播放器初始化保护 — iOS 15秒（流式播放），非iOS 30秒（需要预下载）
+      var initTimeout = isIOSSafari ? 15000 : 30000;
       setTimeout(function () {
         if (!loadingComplete && setupCompleted >= totalSetups - 1) {
-          // 大部分已就绪，可以进入
           console.warn('[HLS] Player init slow, but most ready. Entering.');
           finishLoading();
         }
-      }, 30000);
+      }, initTimeout);
     });
 
     function finishLoading() {

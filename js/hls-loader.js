@@ -1,7 +1,13 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v3
+ * Six Little Ducks - HLS 媒体加载器 v4
  * 
  * 核心原则：所有媒体文件完全下载完成后才允许进入！
+ * 
+ * v4 新增：浏览器持久缓存支持
+ * - 使用 Cache API 将下载的媒体文件存入浏览器持久缓存
+ * - 下次刷新页面时优先从缓存读取，秒级加载
+ * - 不会强制清理缓存，媒体文件长期复用
+ * - 仅当缓存不存在时才从网络下载
  * 
  * - 预加载时用 fetch() 完整下载所有媒体文件
  * - 下载失败自动重试（最多3次），仍失败则降级到 fallback 源
@@ -12,6 +18,12 @@
 
 (function () {
   'use strict';
+
+  // ==========================================
+  //  缓存配置
+  // ==========================================
+  var CACHE_NAME = 'six-little-ducks-media-v1';
+  var cacheAvailable = 'caches' in window;
 
   // ==========================================
   //  平台检测
@@ -84,19 +96,102 @@
   }
 
   // ==========================================
-  //  带进度的 fetch 下载（含重试逻辑）
+  //  缓存辅助函数
   // ==========================================
 
   /**
-   * 下载单个文件，失败自动重试
+   * 将 URL 转为完整绝对路径（用于 Cache API 的 key）
+   */
+  function toAbsoluteURL(relativeUrl) {
+    var a = document.createElement('a');
+    a.href = relativeUrl;
+    return a.href;
+  }
+
+  /**
+   * 尝试从 Cache API 读取文件
+   * @returns {Promise<Response|null>}
+   */
+  function getFromCache(url) {
+    if (!cacheAvailable) return Promise.resolve(null);
+    var absUrl = toAbsoluteURL(url);
+    return caches.open(CACHE_NAME).then(function (cache) {
+      return cache.match(absUrl);
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  /**
+   * 将 Response 存入 Cache API（克隆后存储）
+   */
+  function putToCache(url, response) {
+    if (!cacheAvailable) return Promise.resolve();
+    var absUrl = toAbsoluteURL(url);
+    return caches.open(CACHE_NAME).then(function (cache) {
+      return cache.put(absUrl, response);
+    }).catch(function (err) {
+      console.warn('[HLS Cache] Failed to cache ' + url + ':', err.message);
+    });
+  }
+
+  // ==========================================
+  //  带进度的 fetch 下载（含重试逻辑 + 缓存优先）
+  // ==========================================
+
+  /**
+   * 下载单个文件：优先从缓存读取，未命中则网络下载后存入缓存
    * @param {string} url
    * @param {Function} onProgress - (loaded, total) 回调
    * @param {number} maxRetries - 最大重试次数
-   * @returns {Promise<Blob>}
+   * @returns {Promise<{blob: Blob, fromCache: boolean}>}
    */
   function fetchWithRetry(url, onProgress, maxRetries) {
     maxRetries = maxRetries || 3;
-    let attempt = 0;
+
+    // 第一步：检查缓存
+    return getFromCache(url).then(function (cachedResponse) {
+      if (cachedResponse) {
+        // 🎯 缓存命中！直接使用，无需网络请求
+        console.log('[HLS Cache] ✓ HIT: ' + url);
+        return cachedResponse.blob().then(function (blob) {
+          if (onProgress) onProgress(blob.size, blob.size);
+          return { blob: blob, fromCache: true };
+        });
+      }
+
+      // 缓存未命中，走网络下载
+      console.log('[HLS Cache] ✗ MISS: ' + url + ' → downloading from network');
+      return fetchFromNetwork(url, onProgress, maxRetries).then(function (blob) {
+        // 下载成功后存入缓存（异步，不阻塞主流程）
+        var responseToCache = new Response(blob.slice(0), {
+          status: 200,
+          headers: { 'Content-Type': guessContentType(url), 'Content-Length': String(blob.size) }
+        });
+        putToCache(url, responseToCache);
+        return { blob: blob, fromCache: false };
+      });
+    });
+  }
+
+  /**
+   * 根据 URL 扩展名猜测 Content-Type
+   */
+  function guessContentType(url) {
+    if (url.indexOf('.mp4') !== -1) return 'video/mp4';
+    if (url.indexOf('.mp3') !== -1) return 'audio/mpeg';
+    if (url.indexOf('.ts') !== -1) return 'video/mp2t';
+    if (url.indexOf('.m3u8') !== -1) return 'application/vnd.apple.mpegurl';
+    if (url.indexOf('.ogg') !== -1) return 'audio/ogg';
+    return 'application/octet-stream';
+  }
+
+  /**
+   * 从网络下载文件，失败自动重试
+   * @returns {Promise<Blob>}
+   */
+  function fetchFromNetwork(url, onProgress, maxRetries) {
+    var attempt = 0;
 
     function tryFetch() {
       attempt++;
@@ -135,7 +230,6 @@
       }).catch(function (err) {
         if (attempt < maxRetries) {
           console.warn('[HLS] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
-          // 等待后重试，指数退避
           return new Promise(function (resolve) {
             setTimeout(resolve, 1000 * attempt);
           }).then(tryFetch);
@@ -352,14 +446,24 @@
     var hlsJsReady = isIOSSafari ? Promise.resolve() : loadHlsJs();
 
     // 第 2 步：并行下载所有文件（每个文件有3次重试机会）
+    var cacheHitCount = 0;
     var downloadPromises = downloads.map(function (dl) {
       return fetchWithRetry(dl.url, function (loaded, total) {
         updateDetailProgress(dl.url, loaded, total);
-      }, 3).then(function (blob) {
+      }, 3).then(function (result) {
         successCount++;
-        console.log('[HLS] ✓ Downloaded: ' + dl.url + ' (' + (blob.size / 1024 / 1024).toFixed(1) + ' MB)');
+        if (result.fromCache) {
+          cacheHitCount++;
+          console.log('[HLS] ✓ From cache: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB)');
+        } else {
+          console.log('[HLS] ✓ Downloaded: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB)');
+        }
         updateProgressUI();
-        return { id: dl.id, url: dl.url, type: dl.type, name: dl.name, blob: blob, success: true };
+        // 缓存命中多个时更新 UI 提示
+        if (cacheHitCount > 0 && statusText) {
+          statusText.textContent = '⚡ ' + cacheHitCount + ' 个文件从缓存加载，' + (successCount - cacheHitCount) + ' 个正在下载...';
+        }
+        return { id: dl.id, url: dl.url, type: dl.type, name: dl.name, blob: result.blob, success: true, fromCache: result.fromCache };
       }).catch(function (err) {
         console.error('[HLS] ✗ Failed after retries: ' + dl.url, err.message);
         failedDownloads.push(dl);
@@ -429,7 +533,8 @@
 
       console.log('[HLS] ✅ All resources downloaded and players ready. Entering app!');
 
-      if (statusText) statusText.textContent = '✅ 所有资源下载完成！';
+      var cacheMsg = cacheHitCount > 0 ? '（' + cacheHitCount + ' 个来自缓存 ⚡）' : '';
+      if (statusText) statusText.textContent = '✅ 所有资源加载完成！' + cacheMsg;
       if (progressFill) progressFill.style.width = '100%';
       if (progressText) progressText.textContent = totalFiles + '/' + totalFiles + ' 文件已下载 (100%)';
       hideRetryButton();

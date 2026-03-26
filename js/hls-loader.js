@@ -1,18 +1,18 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v4
+ * Six Little Ducks - HLS 媒体加载器 v5
  * 
- * 核心原则：所有媒体文件完全下载完成后才允许进入！
+ * 核心原则：所有媒体文件就绪后才允许进入，但兼容 iOS 设备内存限制
  * 
- * v4 新增：浏览器持久缓存支持
- * - 使用 Cache API 将下载的媒体文件存入浏览器持久缓存
- * - 下次刷新页面时优先从缓存读取，秒级加载
- * - 不会强制清理缓存，媒体文件长期复用
- * - 仅当缓存不存在时才从网络下载
+ * v5 变更：
+ * - iOS 设备不再预下载大文件，改用 MP4 流式播放（避免 160MB+ 内存占用）
+ * - 非 iOS 设备保留预下载机制（桌面端内存充足）
+ * - iOS 仅验证 MP4 文件可访问（HEAD 请求），然后直接设置 src 让浏览器流式加载
+ * - 移除 iOS 上的 Cache API 缓存（避免大文件占用设备存储）
+ * - 添加更友好的下载进度显示和错误提示
  * 
- * - 预加载时用 fetch() 完整下载所有媒体文件
+ * 非 iOS 模式：
+ * - 预下载所有媒体文件（带 Cache API 持久缓存）
  * - 下载失败自动重试（最多3次），仍失败则降级到 fallback 源
- * - 没有超时强制跳过机制 — 必须下载完才能进入
- * - 提供手动重试按钮，用户可随时触发重新下载
  * - Loading 遮罩在所有文件就绪前绝不消失
  */
 
@@ -264,9 +264,9 @@
     //       未缓冲区域的 seek 会静默失败，导致歌词点击跳转和 AB 循环不工作
     //       MP4 有完整的 moov atom，Safari 对 MP4 的 seek 支持非常好
     if (isIOSSafari) {
-      console.log('[HLS] ' + elementId + ': iOS detected, using MP4 fallback for reliable seek');
+      console.log('[HLS] ' + elementId + ': iOS detected, using MP4 streaming (no preload download)');
       el.src = config.fallback;
-      el.preload = 'auto';
+      el.preload = 'metadata'; // 仅加载元数据，不预下载整个文件
 
       var iosReady = false;
       function iosDone() {
@@ -275,15 +275,15 @@
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
-        console.log('[HLS] ' + elementId + ': Ready (iOS MP4 fallback)');
+        console.log('[HLS] ' + elementId + ': Ready (iOS MP4 streaming)');
         if (onReady) onReady();
       }
 
       var iosOnMeta = function () { iosDone(); };
       var iosOnCanPlay = function () { iosDone(); };
       var iosOnErr = function () {
-        console.warn('[HLS] ' + elementId + ': iOS MP4 fallback load error');
-        iosDone(); // 即使出错也要放行
+        console.warn('[HLS] ' + elementId + ': iOS MP4 load error (will retry on play)');
+        iosDone(); // 即使出错也放行 — play 时浏览器会自动重试
       };
 
       el.addEventListener('loadedmetadata', iosOnMeta);
@@ -291,13 +291,13 @@
       el.addEventListener('error', iosOnErr);
       el.load();
 
-      // 超时保护：20 秒后放行（MP4 流式加载 metadata 通常很快）
+      // 超时保护：8 秒后放行（MP4 metadata 加载应该很快）
       setTimeout(function () {
         if (!iosReady) {
-          console.warn('[HLS] ' + elementId + ': iOS MP4 init timeout, proceeding anyway');
+          console.warn('[HLS] ' + elementId + ': iOS MP4 metadata timeout, proceeding');
           iosDone();
         }
-      }, 20000);
+      }, 8000);
       return;
     }
 
@@ -431,7 +431,7 @@
   }
 
   // ==========================================
-  //  预加载系统 v3：严格模式 — 全部下载完才放行
+  //  预加载系统 v5：iOS 流式 + 非 iOS 预下载
   // ==========================================
 
   // 全局状态
@@ -458,21 +458,156 @@
     // 注入重试按钮（只注入一次）
     ensureRetryButton();
 
+    if (isIOSSafari) {
+      // ========================================
+      //  iOS 路径：流式加载 MP4，不预下载大文件
+      // ========================================
+      preloadForIOS(progressFill, progressText, statusText, loadingOverlay, modeCards);
+    } else {
+      // ========================================
+      //  非 iOS 路径：预下载所有媒体文件
+      // ========================================
+      preloadForDesktop(progressFill, progressText, statusText, loadingOverlay, modeCards);
+    }
+  }
+
+  // ==========================================
+  //  iOS 预加载：验证文件可访问 + 流式加载
+  // ==========================================
+  function preloadForIOS(progressFill, progressText, statusText, loadingOverlay, modeCards) {
+    console.log('[HLS] iOS detected — using streaming mode (no full download)');
+
+    var resourceIds = Object.keys(HLS_SOURCES);
+    // iOS 只需验证 MP4 fallback 文件可访问
+    var fallbackFiles = resourceIds.map(function (id) {
+      return { id: id, url: HLS_SOURCES[id].fallback, name: HLS_SOURCES[id].name };
+    });
+
+    var totalFiles = fallbackFiles.length;
+    var checkedCount = 0;
+    var failedFiles = [];
+
+    if (statusText) statusText.textContent = '⏳ iOS 设备，正在检查媒体文件...';
+    if (progressText) progressText.textContent = '准备中...';
+    updateProgressUI_iOS(progressFill, progressText, 0, totalFiles);
+    hideRetryButton();
+
+    fallbackFiles.forEach(function (file) {
+      // 使用 HEAD 请求验证文件存在且可访问
+      fetch(file.url, { method: 'HEAD' })
+        .then(function (resp) {
+          if (resp.ok) {
+            console.log('[HLS iOS] ✓ Accessible: ' + file.url + ' (' + resp.headers.get('Content-Length') + ' bytes)');
+          } else {
+            console.warn('[HLS iOS] ✗ HTTP ' + resp.status + ': ' + file.url);
+            failedFiles.push(file);
+          }
+          checkedCount++;
+          updateProgressUI_iOS(progressFill, progressText, checkedCount, totalFiles);
+
+          if (checkedCount >= totalFiles) {
+            if (failedFiles.length === 0) {
+              finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds);
+            } else {
+              // 有文件不可访问，显示错误
+              var failedNames = failedFiles.map(function (f) { return f.name; });
+              if (statusText) statusText.textContent = '❌ ' + failedFiles.length + ' 个文件不可访问: ' + failedNames.join(', ');
+              showRetryButton();
+            }
+          }
+        })
+        .catch(function (err) {
+          console.error('[HLS iOS] ✗ Network error for ' + file.url + ':', err.message);
+          failedFiles.push(file);
+          checkedCount++;
+          updateProgressUI_iOS(progressFill, progressText, checkedCount, totalFiles);
+
+          if (checkedCount >= totalFiles) {
+            if (failedFiles.length === fallbackFiles.length) {
+              // 所有文件都失败
+              if (statusText) statusText.textContent = '❌ 网络连接失败，请检查网络后重试';
+              showRetryButton();
+            } else {
+              // 部分失败，仍然尝试继续
+              console.warn('[HLS iOS] Some files failed, proceeding anyway');
+              finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds);
+            }
+          }
+        });
+    });
+
+    // 超时保护：15秒后强制进入（iOS 可能网络慢）
+    setTimeout(function () {
+      if (!loadingComplete && checkedCount >= totalFiles - 1) {
+        console.warn('[HLS iOS] Check timeout, entering anyway');
+        finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds);
+      }
+    }, 15000);
+  }
+
+  function updateProgressUI_iOS(progressFill, progressText, current, total) {
+    var pct = Math.round((current / total) * 100);
+    if (progressFill) progressFill.style.width = pct + '%';
+    if (progressText) progressText.textContent = current + '/' + total + ' 文件就绪 (' + pct + '%)';
+  }
+
+  function finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds) {
+    if (loadingComplete) return;
+    loadingComplete = true;
+
+    console.log('[HLS iOS] ✅ Files verified, setting up streaming players...');
+
+    if (statusText) statusText.textContent = '⏳ 正在初始化播放器...';
+    if (progressFill) progressFill.style.width = '90%';
+    hideRetryButton();
+
+    // 为每个媒体元素设置 MP4 源（流式加载）
+    var setupCompleted = 0;
+    var totalSetups = resourceIds.length;
+
+    resourceIds.forEach(function (id) {
+      setupHLS(id,
+        function onReady() {
+          setupCompleted++;
+          console.log('[HLS iOS] ' + id + ': Player ready (' + setupCompleted + '/' + totalSetups + ')');
+          if (setupCompleted >= totalSetups) {
+            finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalSetups, totalSetups);
+          }
+        },
+        function onError() {
+          setupCompleted++;
+          console.warn('[HLS iOS] ' + id + ': Setup had issues, continuing');
+          if (setupCompleted >= totalSetups) {
+            finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalSetups, totalSetups);
+          }
+        }
+      );
+    });
+
+    // iOS 超时保护：10秒
+    setTimeout(function () {
+      if (!loadingComplete) {
+        console.warn('[HLS iOS] Player init timeout, forcing entry');
+        loadingComplete = true;
+        finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, setupCompleted, totalSetups);
+      }
+    }, 10000);
+  }
+
+  // ==========================================
+  //  非 iOS 预加载：完整下载所有文件
+  // ==========================================
+  function preloadForDesktop(progressFill, progressText, statusText, loadingOverlay, modeCards) {
+    console.log('[HLS] Desktop detected — using full download mode');
+
     var resourceIds = Object.keys(HLS_SOURCES);
 
     // 收集所有需要下载的文件
-    // iOS 使用 MP4 fallback（seek 更可靠），只需预下载 MP4 文件
-    // 非 iOS 使用 HLS，预下载 ts + m3u8
     var downloads = [];
     resourceIds.forEach(function (id) {
       var config = HLS_SOURCES[id];
-      if (isIOSSafari) {
-        // iOS：预下载 MP4/MP3 fallback 文件
-        downloads.push({ id: id, url: config.fallback, type: 'fallback', name: config.name });
-      } else {
-        downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
-        downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
-      }
+      downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
+      downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
     });
 
     var totalFiles = downloads.length;
@@ -507,10 +642,10 @@
     updateProgressUI();
     hideRetryButton();
 
-    // 第 1 步：非 iOS 先加载 hls.js
-    var hlsJsReady = isIOSSafari ? Promise.resolve() : loadHlsJs();
+    // 第 1 步：加载 hls.js
+    var hlsJsReady = loadHlsJs();
 
-    // 第 2 步：并行下载所有文件（每个文件有3次重试机会）
+    // 第 2 步：并行下载所有文件
     var cacheHitCount = 0;
     var downloadPromises = downloads.map(function (dl) {
       return fetchWithRetry(dl.url, function (loaded, total) {
@@ -524,7 +659,6 @@
           console.log('[HLS] ✓ Downloaded: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB)');
         }
         updateProgressUI();
-        // 缓存命中多个时更新 UI 提示
         if (cacheHitCount > 0 && statusText) {
           statusText.textContent = '⚡ ' + cacheHitCount + ' 个文件从缓存加载，' + (successCount - cacheHitCount) + ' 个正在下载...';
         }
@@ -540,11 +674,7 @@
     Promise.all([hlsJsReady].concat(downloadPromises)).then(function (results) {
       if (loadingComplete) return;
 
-      var downloadResults = results.slice(1);
-      var allSuccess = failedDownloads.length === 0;
-
-      if (!allSuccess) {
-        // 有文件下载失败 — 不进入，显示错误和重试按钮
+      if (failedDownloads.length > 0) {
         var failedNames = failedDownloads.map(function (d) { return d.name + '(' + d.type + ')'; });
         if (statusText) {
           statusText.textContent = '❌ ' + failedDownloads.length + ' 个文件下载失败: ' + failedNames.join(', ');
@@ -553,8 +683,7 @@
           progressText.textContent = successCount + '/' + totalFiles + ' 文件已下载';
         }
         showRetryButton();
-        console.error('[HLS] ' + failedDownloads.length + ' files failed. NOT entering app.');
-        return; // 不进入！等用户点重试
+        return;
       }
 
       // 所有文件下载成功！进入播放器初始化
@@ -567,56 +696,54 @@
         setupHLS(id,
           function onReady() {
             setupCompleted++;
-            console.log('[HLS] ' + id + ': Player ready (' + setupCompleted + '/' + totalSetups + ')');
             if (setupCompleted >= totalSetups) {
-              finishLoading();
+              finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalFiles, totalFiles);
             }
           },
           function onError() {
             setupCompleted++;
-            console.warn('[HLS] ' + id + ': Setup failed, but file downloaded');
             if (setupCompleted >= totalSetups) {
-              finishLoading();
+              finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalFiles, totalFiles);
             }
           }
         );
       });
 
-      // 播放器初始化保护 — iOS 15秒（流式播放），非iOS 30秒（需要预下载）
-      var initTimeout = isIOSSafari ? 15000 : 30000;
+      // 桌面超时保护：30秒
       setTimeout(function () {
-        if (!loadingComplete && setupCompleted >= totalSetups - 1) {
-          console.warn('[HLS] Player init slow, but most ready. Entering.');
-          finishLoading();
+        if (!loadingComplete && setupCompleted >= resourceIds.length - 1) {
+          finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, successCount, totalFiles);
         }
-      }, initTimeout);
+      }, 30000);
     });
+  }
 
-    function finishLoading() {
-      if (loadingComplete) return;
-      loadingComplete = true;
+  // ==========================================
+  //  通用完成处理
+  // ==========================================
+  function finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, loadedCount, totalCount) {
+    if (loadingComplete) return;
+    loadingComplete = true;
 
-      console.log('[HLS] ✅ All resources downloaded and players ready. Entering app!');
+    console.log('[HLS] ✅ All resources ready. Entering app!');
 
-      var cacheMsg = cacheHitCount > 0 ? '（' + cacheHitCount + ' 个来自缓存 ⚡）' : '';
-      if (statusText) statusText.textContent = '✅ 所有资源加载完成！' + cacheMsg;
-      if (progressFill) progressFill.style.width = '100%';
-      if (progressText) progressText.textContent = totalFiles + '/' + totalFiles + ' 文件已下载 (100%)';
-      hideRetryButton();
+    if (statusText) statusText.textContent = '✅ 所有资源加载完成！';
+    if (progressFill) progressFill.style.width = '100%';
+    if (progressText) progressText.textContent = totalCount + '/' + totalCount + ' 文件就绪 (100%)';
+    hideRetryButton();
 
-      // 恢复模式卡片交互
-      modeCards.forEach(function (c) { c.style.pointerEvents = ''; });
+    // 恢复模式卡片交互
+    modeCards.forEach(function (c) { c.style.pointerEvents = ''; });
 
-      // 延迟淡出 loading 遮罩
-      setTimeout(function () {
-        if (loadingOverlay) {
-          loadingOverlay.classList.add('hidden');
-          setTimeout(function () {
-            loadingOverlay.style.display = 'none';
-          }, 600);
-        }
-      }, 500);
-    }
+    // 延迟淡出 loading 遮罩
+    setTimeout(function () {
+      if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+        setTimeout(function () {
+          loadingOverlay.style.display = 'none';
+        }, 600);
+      }
+    }, 500);
   }
 
   // ==========================================

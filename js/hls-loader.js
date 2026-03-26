@@ -1,9 +1,13 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v6
+ * Six Little Ducks - HLS 媒体加载器 v7
  * 
  * 核心原则：所有媒体文件就绪后才允许进入，但兼容 iOS 设备内存限制
  * 
- * v6 变更：
+ * v7 变更：
+ * - 后台缓存改用隐藏 <video>/<audio> 原生预加载，不再手动 Cache API 缓存 206 部分响应
+ * - 避免 iOS Safari 上 206 响应干扰正常播放和 seek
+ * 
+ * v6 变更（保留）：
  * - 修复 iOS 路径 loadingComplete 双重设置导致永远卡在"初始化播放器"的 bug
  * - iOS 进入应用后，后台静默预缓存 MP4 前 2MB（moov + 首帧），加速后续播放和 seek
  * - 后台缓存失败不影响用户体验，完全静默
@@ -722,8 +726,8 @@
   }
 
   // ==========================================
-  //  iOS 后台静默预缓存（进入应用后触发）
-  //  预缓存 MP4 前 2MB（moov + 首帧数据），加速后续播放和 seek
+  //  iOS 后台静默预加载（进入应用后触发）
+  //  使用隐藏 <video>/<audio> 元素让浏览器原生缓存，避免 Cache API 206 兼容问题
   // ==========================================
   var backgroundCacheStarted = false;
 
@@ -731,35 +735,23 @@
     if (!isIOSSafari || backgroundCacheStarted) return;
     backgroundCacheStarted = true;
 
-    console.log('[HLS iOS] Starting background prefetch of MP4 headers (2MB each)...');
+    console.log('[HLS iOS] Starting background native preload...');
 
     var resourceIds = Object.keys(HLS_SOURCES);
     resourceIds.forEach(function (id) {
-      var url = HLS_SOURCES[id].fallback;
-      // 使用 Range 请求只下载前 2MB
-      fetch(url, { headers: { 'Range': 'bytes=0-2097151' } })
-        .then(function (resp) {
-          if (resp.ok || resp.status === 206) {
-            return resp.blob().then(function (blob) {
-              // 存入 Cache API 供后续使用
-              var absUrl = toAbsoluteURL(url);
-              var partialResponse = new Response(blob, {
-                status: 206,
-                headers: {
-                  'Content-Type': guessContentType(url),
-                  'Content-Range': 'bytes 0-' + (blob.size - 1) + '/*'
-                }
-              });
-              return putToCache(url, partialResponse).then(function () {
-                console.log('[HLS iOS] ✓ Background cached: ' + url + ' (' + (blob.size / 1024 / 1024).toFixed(1) + ' MB)');
-              });
-            });
-          }
-        })
-        .catch(function (err) {
-          // 后台缓存失败不影响用户体验，静默忽略
-          console.warn('[HLS iOS] Background cache skipped for ' + url + ':', err.message);
-        });
+      var source = HLS_SOURCES[id];
+      var url = source.fallback;
+      var tag = source.type === 'video' ? 'video' : 'audio';
+      var el = document.createElement(tag);
+      el.preload = 'auto';
+      el.muted = true; // 静音避免自动播放策略拦截
+      el.playsInline = true;
+      el.src = url;
+      el.style.display = 'none';
+      // load() 触发浏览器原生缓存（Range 请求），无需手动管理
+      el.load();
+      document.body.appendChild(el);
+      console.log('[HLS iOS] Background preload started: ' + url);
     });
   }
 

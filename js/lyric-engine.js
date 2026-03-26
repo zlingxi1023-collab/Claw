@@ -22,6 +22,9 @@ class LyricEngine {
     this.loopA = null;
     this.loopB = null;
     this.onLoopChange = null;
+    // 自动重播回调
+    this.onAutoplayBlocked = null;
+    this.autoLoop = true; // 默认播放结束自动重播
   }
 
   init(mediaElement, mode) {
@@ -38,7 +41,7 @@ class LyricEngine {
     // 绑定事件前先移除旧的（防止重复绑定）
     this._onPlay = () => { this.isPlaying = true; this._startSync(); };
     this._onPause = () => { this.isPlaying = false; this._stopSync(); };
-    this._onEnded = () => { this.isPlaying = false; this._stopSync(); };
+    this._onEnded = () => { this.isPlaying = false; this._stopSync(); this._handleEnded(); };
     this._onSeeked = () => { this._updateCurrentLine(); };
 
     this.mediaElement.addEventListener('play', this._onPlay);
@@ -61,30 +64,55 @@ class LyricEngine {
     var targetTime = Math.max(0, Math.min(time, this.getDuration()));
     this.mediaElement.currentTime = targetTime;
 
-    // iOS Safari 有时 seek 会静默失败，添加验证重试
+    // iOS Safari seek 静默失败时多次验证重试
     var self = this;
     var el = this.mediaElement;
-    setTimeout(function () {
-      if (Math.abs(el.currentTime - targetTime) > 1) {
-        console.warn('[LyricEngine] Seek verify failed, retrying. target=' + targetTime + ' actual=' + el.currentTime);
-        el.currentTime = targetTime;
-      }
-    }, 300);
+    var delays = [100, 300, 600];
+    delays.forEach(function (delay) {
+      setTimeout(function () {
+        if (Math.abs(el.currentTime - targetTime) > 1) {
+          console.warn('[LyricEngine] Seek verify failed at ' + delay + 'ms, retrying. target=' + targetTime + ' actual=' + el.currentTime);
+          el.currentTime = targetTime;
+          // 最终仍失败时强制更新歌词 UI
+          if (delay === 600) {
+            self.currentIndex = -1;
+            self._updateCurrentLine();
+          }
+        }
+      }, delay);
+    });
   }
 
   seekToLine(index) {
     if (index >= 0 && index < LYRICS_DATA.length) {
       this.seek(LYRICS_DATA[index].startTime);
-      // 立即更新歌词 UI，不等 seeked 事件（iOS 可能延迟触发）
       this.currentIndex = -1; // 强制触发变更
       var self = this;
-      setTimeout(function () { self._updateCurrentLine(); }, 100);
+      // 多轮更新 UI，确保 iOS seek 完成后歌词也跟着更新
+      [100, 300, 600].forEach(function (delay) {
+        setTimeout(function () { self._updateCurrentLine(); }, delay);
+      });
     }
   }
 
   restart() {
-    this.seek(0);
-    if (!this.isPlaying) this.togglePlay();
+    if (!this.mediaElement) return;
+    var self = this;
+    this.mediaElement.currentTime = 0;
+    // iOS Safari autoplay 限制：ended 后 play() 可能被拒，需要用户交互
+    var p = this.mediaElement.play();
+    if (p && p.catch) {
+      p.catch(function (err) {
+        console.warn('[LyricEngine] autoplay blocked after ended, needs user tap:', err.message);
+        self.isPlaying = false;
+        // 通知上层显示"点击继续"提示
+        if (self.onAutoplayBlocked) self.onAutoplayBlocked();
+      });
+    }
+    this.isPlaying = true;
+    this._startSync();
+    // 重置歌词索引，强制重新匹配
+    this.currentIndex = -1;
   }
 
   setRole(role) { this.selectedRole = role; }
@@ -150,6 +178,12 @@ class LyricEngine {
         setTimeout(function () { self._updateCurrentLine(); }, 100);
       }
     }
+  }
+
+  _handleEnded() {
+    if (!this.autoLoop) return;
+    console.log('[LyricEngine] Playback ended, auto-restarting...');
+    this.restart();
   }
 
   _updateCurrentLine() {
@@ -218,6 +252,7 @@ class LyricEngine {
     this.onActionChange = null;
     this.onFormationChange = null;
     this.onLoopChange = null;
+    this.onAutoplayBlocked = null;
     this._inited = false;
   }
 }

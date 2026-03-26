@@ -1,13 +1,17 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v5
+ * Six Little Ducks - HLS 媒体加载器 v6
  * 
  * 核心原则：所有媒体文件就绪后才允许进入，但兼容 iOS 设备内存限制
  * 
- * v5 变更：
+ * v6 变更：
+ * - 修复 iOS 路径 loadingComplete 双重设置导致永远卡在"初始化播放器"的 bug
+ * - iOS 进入应用后，后台静默预缓存 MP4 前 2MB（moov + 首帧），加速后续播放和 seek
+ * - 后台缓存失败不影响用户体验，完全静默
+ * 
+ * v5 变更（保留）：
  * - iOS 设备不再预下载大文件，改用 MP4 流式播放（避免 160MB+ 内存占用）
  * - 非 iOS 设备保留预下载机制（桌面端内存充足）
  * - iOS 仅验证 MP4 文件可访问（HEAD 请求），然后直接设置 src 让浏览器流式加载
- * - 移除 iOS 上的 Cache API 缓存（避免大文件占用设备存储）
  * - 添加更友好的下载进度显示和错误提示
  * 
  * 非 iOS 模式：
@@ -431,7 +435,7 @@
   }
 
   // ==========================================
-  //  预加载系统 v5：iOS 流式 + 非 iOS 预下载
+  //  预加载系统 v6：iOS 流式 + 非 iOS 预下载 + 后台缓存
   // ==========================================
 
   // 全局状态
@@ -552,8 +556,8 @@
   }
 
   function finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds) {
-    if (loadingComplete) return;
-    loadingComplete = true;
+    // 注意：这里不设 loadingComplete = true，留给 finishLoadingCommon 统一设置
+    // 之前的 bug：这里设了 true 导致 finishLoadingCommon 检查 if(loadingComplete) return 直接退出
 
     console.log('[HLS iOS] ✅ Files verified, setting up streaming players...');
 
@@ -584,14 +588,13 @@
       );
     });
 
-    // iOS 超时保护：10秒
+    // iOS 超时保护：8秒（MP4 metadata 加载 + loadedmetadata 事件应该很快）
     setTimeout(function () {
       if (!loadingComplete) {
         console.warn('[HLS iOS] Player init timeout, forcing entry');
-        loadingComplete = true;
         finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, setupCompleted, totalSetups);
       }
-    }, 10000);
+    }, 8000);
   }
 
   // ==========================================
@@ -719,6 +722,48 @@
   }
 
   // ==========================================
+  //  iOS 后台静默预缓存（进入应用后触发）
+  //  预缓存 MP4 前 2MB（moov + 首帧数据），加速后续播放和 seek
+  // ==========================================
+  var backgroundCacheStarted = false;
+
+  function startBackgroundCache() {
+    if (!isIOSSafari || backgroundCacheStarted) return;
+    backgroundCacheStarted = true;
+
+    console.log('[HLS iOS] Starting background prefetch of MP4 headers (2MB each)...');
+
+    var resourceIds = Object.keys(HLS_SOURCES);
+    resourceIds.forEach(function (id) {
+      var url = HLS_SOURCES[id].fallback;
+      // 使用 Range 请求只下载前 2MB
+      fetch(url, { headers: { 'Range': 'bytes=0-2097151' } })
+        .then(function (resp) {
+          if (resp.ok || resp.status === 206) {
+            return resp.blob().then(function (blob) {
+              // 存入 Cache API 供后续使用
+              var absUrl = toAbsoluteURL(url);
+              var partialResponse = new Response(blob, {
+                status: 206,
+                headers: {
+                  'Content-Type': guessContentType(url),
+                  'Content-Range': 'bytes 0-' + (blob.size - 1) + '/*'
+                }
+              });
+              return putToCache(url, partialResponse).then(function () {
+                console.log('[HLS iOS] ✓ Background cached: ' + url + ' (' + (blob.size / 1024 / 1024).toFixed(1) + ' MB)');
+              });
+            });
+          }
+        })
+        .catch(function (err) {
+          // 后台缓存失败不影响用户体验，静默忽略
+          console.warn('[HLS iOS] Background cache skipped for ' + url + ':', err.message);
+        });
+    });
+  }
+
+  // ==========================================
   //  通用完成处理
   // ==========================================
   function finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, loadedCount, totalCount) {
@@ -744,6 +789,11 @@
         }, 600);
       }
     }, 500);
+
+    // iOS：进入后启动后台静默预缓存
+    if (isIOSSafari) {
+      startBackgroundCache();
+    }
   }
 
   // ==========================================

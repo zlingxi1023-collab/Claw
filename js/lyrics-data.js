@@ -4,6 +4,7 @@
  * 歌曲总时长 ~95.6 秒 (1:35)
  * 
  * 歌曲结构: Intro → V1 → Chorus1 → Bridge1 → V2 → Chorus2 → Bridge2 → V3 → Chorus3 → Outro
+ * 每段编排: 2人领唱(2句) → 同2人继续唱(2句) → 全员合唱(2句) — "2-2-合"模式
  */
 
 // 6只鸭子角色配置 - 每只鸭子有独特的颜色、名称和SVG形象
@@ -144,10 +145,10 @@ const LYRICS_DATA = [
     action: "🚶 红鸭+青鸭前移两步，其余原地轻摆", formation: "verse1Lead" },
   { startTime: 10.00, endTime: 12.64, text: "Fat ones, skinny ones, fair ones too.", singers: ["duck1", "duck2"], type: "verse", section: "Verse 1",
     action: "🙌 红鸭+青鸭双手张开比大小，左右摇摆", formation: "verse1Lead" },
-  { startTime: 12.68, endTime: 16.34, text: "But the one little duck with the feather on his back,", singers: ["duck1"], type: "verse", section: "Verse 1",
-    action: "☝️ 红鸭向前一步独唱，手指向上指天", formation: "verse1Solo" },
-  { startTime: 16.90, endTime: 20.00, text: "He led the others with a quack, quack, quack.", singers: ["duck1"], type: "verse", section: "Verse 1",
-    action: "🦆 红鸭做嘎嘎手势（手掌开合），带领大家", formation: "verse1Solo" },
+  { startTime: 12.68, endTime: 16.34, text: "But the one little duck with the feather on his back,", singers: ["duck1", "duck2"], type: "verse", section: "Verse 1",
+    action: "☝️ 红鸭+青鸭一起唱，手指向上指天", formation: "verse1Lead" },
+  { startTime: 16.90, endTime: 20.00, text: "He led the others with a quack, quack, quack.", singers: ["duck1", "duck2"], type: "verse", section: "Verse 1",
+    action: "🦆 红鸭+青鸭一起做嘎嘎手势（手掌开合），带领大家", formation: "verse1Lead" },
   { startTime: 20.18, endTime: 23.38, text: "Quack, quack, quack. Quack, quack, quack.", singers: ALL_DUCKS, type: "chorus", section: "Verse 1",
     action: "👏 全员拍手+嘎嘎手势，节奏一致", formation: "chorusLine" },
   { startTime: 23.70, endTime: 26.82, text: "He led the others with a quack, quack, quack.", singers: ALL_DUCKS, type: "chorus", section: "Verse 1",
@@ -180,10 +181,10 @@ const LYRICS_DATA = [
     action: "🏠 黄鸭+紫鸭前移领唱，做回家手势", formation: "verse3Lead" },
   { startTime: 58.50, endTime: 61.38, text: "Wibble wobble, wibble wobble, ho hum hum.", singers: ["duck5", "duck6"], type: "verse", section: "Verse 3",
     action: "💃 黄鸭+紫鸭摇摆+点头", formation: "verse3Lead" },
-  { startTime: 61.38, endTime: 65.04, text: "But the one little duck with the feather on his back,", singers: ["duck5"], type: "verse", section: "Verse 3",
-    action: "☝️ 黄鸭独唱前移，做展翅动作", formation: "verse3Solo" },
-  { startTime: 65.62, endTime: 68.26, text: "He led the others with a quack, quack, quack.", singers: ["duck5"], type: "verse", section: "Verse 3",
-    action: "🦆 黄鸭嘎嘎手势领唱", formation: "verse3Solo" },
+  { startTime: 61.38, endTime: 65.04, text: "But the one little duck with the feather on his back,", singers: ["duck5", "duck6"], type: "verse", section: "Verse 3",
+    action: "☝️ 黄鸭+紫鸭一起唱，做展翅动作", formation: "verse3Lead" },
+  { startTime: 65.62, endTime: 68.26, text: "He led the others with a quack, quack, quack.", singers: ["duck5", "duck6"], type: "verse", section: "Verse 3",
+    action: "🦆 黄鸭+紫鸭一起做嘎嘎手势领唱", formation: "verse3Lead" },
   { startTime: 68.68, endTime: 72.02, text: "Quack, quack, quack. Quack, quack, quack.", singers: ALL_DUCKS, type: "chorus", section: "Verse 3",
     action: "👏 全员拍手+嘎嘎手势", formation: "chorusLine" },
   { startTime: 72.30, endTime: 76.20, text: "He led the others with a quack, quack, quack.", singers: ALL_DUCKS, type: "chorus", section: "Verse 3",

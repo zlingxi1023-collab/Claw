@@ -1,25 +1,27 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v7
+ * Six Little Ducks - HLS 媒体加载器 v8
  * 
  * 核心原则：所有媒体文件就绪后才允许进入，但兼容 iOS 设备内存限制
  * 
- * v7 变更：
- * - 后台缓存改用隐藏 <video>/<audio> 原生预加载，不再手动 Cache API 缓存 206 部分响应
- * - 避免 iOS Safari 上 206 响应干扰正常播放和 seek
+ * v8 变更：
+ * - 适配 Cloudflare Pages 部署（单文件 25MB 限制）
+ * - MP4 视频压缩至 25MB 以内（CRF 28，H.264 Main profile）
+ * - HLS 从 byte-range 单文件模式改为独立分片模式（seg000.ts ~ segNNN.ts）
+ * - 桌面端预下载改为只下载 m3u8 播放列表，分片由 hls.js 按需加载
+ * - 移除 HLS_SOURCES 中的 ts 字段（不再有单个大 seg.ts 文件）
+ * 
+ * v7 变更（保留）：
+ * - 后台缓存改用隐藏 <video>/<audio> 原生预加载
  * 
  * v6 变更（保留）：
  * - 修复 iOS 路径 loadingComplete 双重设置导致永远卡在"初始化播放器"的 bug
- * - iOS 进入应用后，后台静默预缓存 MP4 前 2MB（moov + 首帧），加速后续播放和 seek
- * - 后台缓存失败不影响用户体验，完全静默
  * 
  * v5 变更（保留）：
- * - iOS 设备不再预下载大文件，改用 MP4 流式播放（避免 160MB+ 内存占用）
+ * - iOS 设备不再预下载大文件，改用 MP4 流式播放
  * - 非 iOS 设备保留预下载机制（桌面端内存充足）
- * - iOS 仅验证 MP4 文件可访问（HEAD 请求），然后直接设置 src 让浏览器流式加载
- * - 添加更友好的下载进度显示和错误提示
  * 
  * 非 iOS 模式：
- * - 预下载所有媒体文件（带 Cache API 持久缓存）
+ * - 预下载 m3u8 播放列表（HLS 分片由 hls.js 按需加载）
  * - 下载失败自动重试（最多3次），仍失败则降级到 fallback 源
  * - Loading 遮罩在所有文件就绪前绝不消失
  */
@@ -47,21 +49,18 @@
   const HLS_SOURCES = {
     'perf-video': {
       hls: 'media/hls/video-muted/index.m3u8',
-      ts: 'media/hls/video-muted/seg.ts',
       fallback: 'media/six-little-ducks-video-muted.mp4',
       type: 'video',
       name: '表演视频'
     },
     'prac-video': {
       hls: 'media/hls/video/index.m3u8',
-      ts: 'media/hls/video/seg.ts',
       fallback: 'media/six-little-ducks-video.mp4',
       type: 'video',
       name: '练习视频'
     },
     'perf-audio': {
       hls: 'media/hls/audio/index.m3u8',
-      ts: 'media/hls/audio/seg.ts',
       fallback: 'media/six-little-ducks-instrumental-extracted.mp3',
       type: 'audio',
       name: '伴奏音频'
@@ -609,11 +608,10 @@
 
     var resourceIds = Object.keys(HLS_SOURCES);
 
-    // 收集所有需要下载的文件
+    // 收集所有需要下载的文件（仅 m3u8 播放列表，HLS 分片由 hls.js 按需加载）
     var downloads = [];
     resourceIds.forEach(function (id) {
       var config = HLS_SOURCES[id];
-      downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name });
       downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
     });
 

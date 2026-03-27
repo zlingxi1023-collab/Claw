@@ -49,6 +49,58 @@
     } else {
       preloadAllResources();
     }
+
+    // URL 参数直接进入指定模式
+    // 支持: ?mode=perform / ?mode=performance → 表演模式
+    //        ?mode=practice → 练习模式
+    //        ?role=duck1 ~ duck6 → 预选角色
+    handleURLParams();
+  }
+
+  // ==========================================
+  //  URL 参数路由
+  //  ?mode=perform|performance → 直接进入表演模式
+  //  ?mode=practice           → 直接进入练习模式
+  //  ?role=duck1~duck6        → 预选角色
+  // ==========================================
+  function handleURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    const modeParam = (params.get('mode') || '').toLowerCase();
+    const roleParam = (params.get('role') || '').toLowerCase();
+
+    // 预选角色
+    if (roleParam && DUCK_ROLES[roleParam]) {
+      selectRole(roleParam);
+    }
+
+    // 直接进入对应模式（等加载完成后切换）
+    if (modeParam === 'perform' || modeParam === 'performance') {
+      waitForLoadingThen(() => switchMode('performance'));
+    } else if (modeParam === 'practice') {
+      waitForLoadingThen(() => switchMode('practice'));
+    }
+  }
+
+  function waitForLoadingThen(callback) {
+    // 如果加载已完成（loading overlay 已隐藏），立即执行
+    if (loadingOverlay.classList.contains('hidden') || loadingOverlay.style.display === 'none') {
+      callback();
+      return;
+    }
+    // 否则用 MutationObserver 监听加载完成
+    const observer = new MutationObserver(() => {
+      if (loadingOverlay.classList.contains('hidden') || loadingOverlay.style.display === 'none') {
+        observer.disconnect();
+        callback();
+      }
+    });
+    observer.observe(loadingOverlay, { attributes: true, attributeFilter: ['class', 'style'] });
+
+    // 安全兜底：最多等 15 秒，强制切换
+    setTimeout(() => {
+      observer.disconnect();
+      if (!currentMode) callback();
+    }, 15000);
   }
 
   // ==========================================
@@ -238,19 +290,38 @@
     const container = $('#selector-bubbles');
     if (!container) return;
     const colors = Object.values(DUCK_ROLES).map(r => r.color);
-    for (let i = 0; i < 15; i++) {
+    // 更大更饱满的气泡
+    for (let i = 0; i < 18; i++) {
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      const size = 40 + Math.random() * 120;
+      const size = 50 + Math.random() * 160;
       bubble.style.width = size + 'px';
       bubble.style.height = size + 'px';
       bubble.style.left = Math.random() * 100 + '%';
       bubble.style.top = Math.random() * 100 + '%';
       bubble.style.background = colors[Math.floor(Math.random() * colors.length)];
-      bubble.style.setProperty('--duration', (4 + Math.random() * 6) + 's');
-      bubble.style.setProperty('--delay', Math.random() * 4 + 's');
-      bubble.style.setProperty('--float-y', (-20 - Math.random() * 40) + 'px');
+      bubble.style.opacity = (0.08 + Math.random() * 0.18).toFixed(2);
+      bubble.style.setProperty('--duration', (5 + Math.random() * 8) + 's');
+      bubble.style.setProperty('--delay', Math.random() * 5 + 's');
+      bubble.style.setProperty('--float-y', (-15 - Math.random() * 35) + 'px');
+      bubble.style.filter = 'blur(' + (1 + Math.random() * 2).toFixed(1) + 'px)';
       container.appendChild(bubble);
+    }
+
+    // 可爱装饰元素（星星、爱心、音符）
+    const modeSelector = $('#mode-selector');
+    if (!modeSelector) return;
+    const cuteEmojis = ['⭐', '💛', '🌟', '💕', '🎵', '✨', '🌸', '🎀', '💫', '🦋'];
+    for (let i = 0; i < 12; i++) {
+      const deco = document.createElement('div');
+      deco.className = 'cute-decoration';
+      deco.textContent = cuteEmojis[Math.floor(Math.random() * cuteEmojis.length)];
+      deco.style.left = (5 + Math.random() * 90) + '%';
+      deco.style.top = (5 + Math.random() * 85) + '%';
+      deco.style.fontSize = (0.8 + Math.random() * 1.0) + 'rem';
+      deco.style.animationDelay = (Math.random() * 3) + 's';
+      deco.style.animationDuration = (1.5 + Math.random() * 2) + 's';
+      modeSelector.appendChild(deco);
     }
   }
 

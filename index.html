@@ -6,7 +6,8 @@
   <title>🦆 Six Little Ducks - 合唱表演</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
 </head>
 <body>
@@ -33,6 +34,20 @@
   <div id="mode-selector">
     <!-- 背景装饰 -->
     <div class="bg-bubbles" id="selector-bubbles"></div>
+    
+    <!-- 云朵装饰 -->
+    <div class="cloud-decoration cloud-1"></div>
+    <div class="cloud-decoration cloud-2"></div>
+    <div class="cloud-decoration cloud-3"></div>
+    
+    <!-- 底部波浪装饰 -->
+    <div class="wave-decoration">
+      <svg viewBox="0 0 1440 120" preserveAspectRatio="none">
+        <path d="M0,60 C360,120 720,0 1080,60 C1260,90 1380,30 1440,60 L1440,120 L0,120 Z" fill="rgba(255,220,200,0.3)"/>
+        <path d="M0,80 C240,40 480,100 720,70 C960,40 1200,100 1440,80 L1440,120 L0,120 Z" fill="rgba(200,230,255,0.3)"/>
+        <path d="M0,95 C180,80 360,110 540,95 C720,80 900,110 1080,95 C1260,80 1380,105 1440,95 L1440,120 L0,120 Z" fill="rgba(220,255,220,0.25)"/>
+      </svg>
+    </div>
     
     <div class="title-area">
       <div class="title-ducks-container" id="title-ducks">

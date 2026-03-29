@@ -1,16 +1,14 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v11
+ * Six Little Ducks - HLS 媒体加载器 v12
  * 
  * 核心架构：先下载后播放（Download-then-Play）
  * 
- * v11 变更：
- * - Cache API 持久化：下载的文件存入 Cache Storage，关闭/刷新浏览器不丢失
- * - 启动时缓存完整性检查：所有文件已缓存 → 秒开，跳过下载
- * - 断点续传：下载中断后，下次从已下载位置继续（部分数据暂存 + 合并）
- * - 每个媒体流使用单个完整 TS 文件（不分片）
- * - 下载完成后创建 Blob URL，本地播放
- * - Chrome/桌面：hls.js 自定义 loader 从 Blob 读取
- * - iOS Safari/iPad：直接用 Blob URL（Safari 原生支持 TS）
+ * v12 变更（修复 Mac Chrome 无法播放）：
+ * - 修复：hls.js 自定义 loader 改用正确的 class 继承方式（之前的工厂函数方式有 bug）
+ * - 修复：m3u8 不再改写为 blob: URL，而是保留原始 TS 文件名，由 loader 统一拦截
+ * - 修复：Chrome 降级路径改用 MP4 fallback（Chrome 不能直接播放 .ts 文件）
+ * - 修复：macOS Safari 检测不再依赖 hlsJsLoaded 标志（消除时序问题）
+ * - 新增：hls.js loader context.type 精确匹配 manifest/fragment
  * 
  * 保持 window.HLSLoader.preloadAllResourcesHLS() 接口不变
  */
@@ -88,13 +86,13 @@
       script.onload = function () {
         hlsJsLoaded = true;
         hlsJsLoading = false;
-        console.log('[HLS v11] hls.js loaded successfully');
+        console.log('[HLS v12] hls.js loaded successfully');
         hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
       script.onerror = function () {
         hlsJsLoading = false;
-        console.warn('[HLS v11] Failed to load hls.js from CDN');
+        console.warn('[HLS v12] Failed to load hls.js from CDN');
         hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
@@ -127,7 +125,7 @@
     return caches.open(CACHE_NAME).then(function (cache) {
       return cache.put(absUrl, response);
     }).catch(function (err) {
-      console.warn('[HLS v11 Cache] Failed to cache ' + url + ':', err.message);
+      console.warn('[HLS v12 Cache] Failed to cache ' + url + ':', err.message);
     });
   }
 
@@ -238,19 +236,19 @@
     // 第 1 步：检查完整缓存
     return getFromCache(url).then(function (cachedResponse) {
       if (cachedResponse) {
-        console.log('[HLS v11 Cache] ✓ HIT: ' + url);
+        console.log('[HLS v12 Cache] ✓ HIT: ' + url);
         return cachedResponse.blob().then(function (blob) {
           if (blob.size > 102400 || url.indexOf('.m3u8') !== -1) {
             if (onProgress) onProgress(blob.size, blob.size);
             return { blob: blob, fromCache: true };
           }
           // 缓存文件太小，可能是错误响应，重新下载
-          console.warn('[HLS v11 Cache] Cached file too small (' + blob.size + 'B), re-downloading');
+          console.warn('[HLS v12 Cache] Cached file too small (' + blob.size + 'B), re-downloading');
           return doDownloadWithResume(url, onProgress, maxRetries);
         });
       }
 
-      console.log('[HLS v11 Cache] ✗ MISS: ' + url + ' → checking partial data');
+      console.log('[HLS v12 Cache] ✗ MISS: ' + url + ' → checking partial data');
       return doDownloadWithResume(url, onProgress, maxRetries);
     });
   }
@@ -262,7 +260,7 @@
       var resumeOffset = partialBlob ? partialBlob.size : 0;
 
       if (resumeOffset > 0) {
-        console.log('[HLS v11 Resume] Found partial data for ' + url + ': ' + (resumeOffset / 1024 / 1024).toFixed(1) + ' MB, resuming...');
+        console.log('[HLS v12 Resume] Found partial data for ' + url + ': ' + (resumeOffset / 1024 / 1024).toFixed(1) + ' MB, resuming...');
       }
 
       return fetchFromNetworkResumable(url, resumeOffset, partialBlob, onProgress, maxRetries).then(function (blob) {
@@ -303,7 +301,7 @@
         // 如果服务器不支持 Range（返回 200 而非 206），则从头下载
         var isPartial = response.status === 206;
         if (resumeOffset > 0 && !isPartial) {
-          console.log('[HLS v11 Resume] Server returned ' + response.status + ' (no Range support), downloading from start');
+          console.log('[HLS v12 Resume] Server returned ' + response.status + ' (no Range support), downloading from start');
           resumeOffset = 0;
           existingBlob = null;
         }
@@ -370,13 +368,13 @@
                   partialFull = partialChunks;
                 }
                 savePartialData(url, partialFull);
-                console.log('[HLS v11 Resume] Saved partial: ' + (partialFull.size / 1024 / 1024).toFixed(1) + ' MB');
+                console.log('[HLS v12 Resume] Saved partial: ' + (partialFull.size / 1024 / 1024).toFixed(1) + ' MB');
               }
 
               pump();
             }).catch(function (err) {
               // 下载中断，保存已下载的部分数据
-              console.warn('[HLS v11 Resume] Download interrupted: ' + err.message);
+              console.warn('[HLS v12 Resume] Download interrupted: ' + err.message);
               if (chunks.length > 0 && url.indexOf('.ts') !== -1) {
                 var partialChunks = new Blob(chunks);
                 var partialFull;
@@ -386,7 +384,7 @@
                   partialFull = partialChunks;
                 }
                 savePartialData(url, partialFull).then(function () {
-                  console.log('[HLS v11 Resume] Saved ' + (partialFull.size / 1024 / 1024).toFixed(1) + ' MB for next resume');
+                  console.log('[HLS v12 Resume] Saved ' + (partialFull.size / 1024 / 1024).toFixed(1) + ' MB for next resume');
                 });
                 // 更新 resumeOffset，以便重试时继续
                 resumeOffset = partialFull.size;
@@ -399,7 +397,7 @@
         });
       }).catch(function (err) {
         if (attempt < maxRetries) {
-          console.warn('[HLS v11] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
+          console.warn('[HLS v12] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
           return new Promise(function (resolve) {
             setTimeout(resolve, 1000 * attempt);
           }).then(tryFetch);
@@ -417,14 +415,14 @@
   function setupPlayerFromBlob(elementId, onReady, onError) {
     var config = HLS_SOURCES[elementId];
     if (!config) {
-      console.warn('[HLS v11] Unknown element:', elementId);
+      console.warn('[HLS v12] Unknown element:', elementId);
       if (onError) onError();
       return;
     }
 
     var el = document.getElementById(elementId);
     if (!el) {
-      console.warn('[HLS v11] Element not found:', elementId);
+      console.warn('[HLS v12] Element not found:', elementId);
       if (onError) onError();
       return;
     }
@@ -436,7 +434,7 @@
     //  Safari 原生支持 TS 格式播放
     // ======================================
     if (isIOSSafari) {
-      console.log('[HLS v11] ' + elementId + ': iOS mode — using Blob URL directly');
+      console.log('[HLS v12] ' + elementId + ': iOS mode — using Blob URL directly');
 
       if (store && store.tsBlobUrl) {
         // 优先用 TS Blob URL
@@ -454,14 +452,14 @@
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
-        console.log('[HLS v11] ' + elementId + ': Ready (iOS Blob)');
+        console.log('[HLS v12] ' + elementId + ': Ready (iOS Blob)');
         if (onReady) onReady();
       }
 
       var iosOnMeta = function () { iosDone(); };
       var iosOnCanPlay = function () { iosDone(); };
       var iosOnErr = function () {
-        console.warn('[HLS v11] ' + elementId + ': iOS Blob URL failed, trying fallback MP4');
+        console.warn('[HLS v12] ' + elementId + ': iOS Blob URL failed, trying fallback MP4');
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
@@ -475,7 +473,7 @@
         });
         el.addEventListener('error', function onFBErr() {
           el.removeEventListener('error', onFBErr);
-          console.warn('[HLS v11] ' + elementId + ': iOS fallback also failed');
+          console.warn('[HLS v12] ' + elementId + ': iOS fallback also failed');
           iosDone();
         });
         el.load();
@@ -487,17 +485,17 @@
       el.load();
 
       // 超时保护
-      setTimeout(function () { if (!iosReady) { console.warn('[HLS v11] ' + elementId + ': iOS timeout'); iosDone(); } }, 10000);
+      setTimeout(function () { if (!iosReady) { console.warn('[HLS v12] ' + elementId + ': iOS timeout'); iosDone(); } }, 10000);
       return;
     }
 
     // ======================================
     //  策略 2: macOS Safari — 原生 HLS 支持
-    //  用 Blob URL 的 m3u8（需要改写路径指向 TS Blob）
-    //  或者直接用 TS Blob URL
+    //  Safari 可以直接播放 TS Blob URL（原生支持 MPEG-TS 解码）
+    //  注意：不再依赖 hlsJsLoaded 标志，改用 isSafari 精确检测
     // ======================================
-    if (el.canPlayType('application/vnd.apple.mpegurl') && !hlsJsLoaded) {
-      console.log('[HLS v11] ' + elementId + ': Native HLS (Safari) — using TS Blob URL');
+    if (isSafari && el.canPlayType('application/vnd.apple.mpegurl')) {
+      console.log('[HLS v12] ' + elementId + ': macOS Safari — using TS Blob URL (native TS support)');
 
       if (store && store.tsBlobUrl) {
         el.src = store.tsBlobUrl;
@@ -509,7 +507,7 @@
       function nativeDone() {
         if (nativeReady) return;
         nativeReady = true;
-        console.log('[HLS v11] ' + elementId + ': Ready (Native)');
+        console.log('[HLS v12] ' + elementId + ': Ready (Native Safari)');
         if (onReady) onReady();
       }
 
@@ -519,7 +517,7 @@
       });
       el.addEventListener('error', function onErr() {
         el.removeEventListener('error', onErr);
-        console.warn('[HLS v11] ' + elementId + ': Native playback failed, trying fallback');
+        console.warn('[HLS v12] ' + elementId + ': Native playback failed, trying MP4 fallback');
         el.src = config.fallback;
         el.load();
         el.addEventListener('loadedmetadata', function onFB() {
@@ -529,23 +527,23 @@
       });
       el.load();
 
-      setTimeout(function () { if (!nativeReady) { console.warn('[HLS v11] ' + elementId + ': Native timeout'); nativeDone(); } }, 15000);
+      setTimeout(function () { if (!nativeReady) { console.warn('[HLS v12] ' + elementId + ': Native timeout'); nativeDone(); } }, 15000);
       return;
     }
 
     // ======================================
-    //  策略 3: Chrome 等 — hls.js + 自定义 Blob Loader
+    //  策略 3: Chrome / Firefox 等 — hls.js + 自定义 Blob Loader
+    //  Chrome 不能直接播放 .ts 文件，必须通过 hls.js 做 MPEG-TS → fMP4 转封装
     // ======================================
     if (typeof Hls !== 'undefined' && Hls.isSupported() && store && store.tsBlob && store.m3u8Text) {
-      console.log('[HLS v11] ' + elementId + ': Using hls.js with local Blob loader');
+      console.log('[HLS v12] ' + elementId + ': Using hls.js with BlobLoader (Chrome path)');
 
       if (hlsInstances[elementId]) {
         hlsInstances[elementId].destroy();
       }
 
-      // 创建自定义 loader，让 hls.js 从内存 Blob 读取
-      var localStore = store;
-      var CustomLoader = createBlobLoader(localStore);
+      // 创建自定义 loader class（正确的 hls.js loader 注册方式）
+      var CustomLoader = createBlobLoaderClass(store);
 
       var hls = new Hls({
         maxBufferLength: 60,
@@ -561,34 +559,42 @@
         loader: CustomLoader
       });
 
-      hls.loadSource(config.hls); // hls.js 会请求 m3u8 → 被 CustomLoader 拦截
+      hls.loadSource(config.hls);
       hls.attachMedia(el);
 
+      var hlsReady = false;
       hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        console.log('[HLS v11] ' + elementId + ': Manifest parsed (from Blob)');
+        if (hlsReady) return;
+        hlsReady = true;
+        console.log('[HLS v12] ' + elementId + ': Manifest parsed, player ready (hls.js)');
         if (onReady) onReady();
       });
 
       hls.on(Hls.Events.ERROR, function (event, data) {
+        console.warn('[HLS v12] ' + elementId + ': hls.js error:', data.type, data.details, data.fatal);
         if (data.fatal) {
-          console.warn('[HLS v11] ' + elementId + ': hls.js fatal error, using TS Blob URL directly');
+          console.warn('[HLS v12] ' + elementId + ': Fatal error, falling back to MP4');
           hls.destroy();
           delete hlsInstances[elementId];
-          // 降级：直接用 TS Blob URL
-          if (store.tsBlobUrl) {
-            el.src = store.tsBlobUrl;
-          } else {
-            el.src = config.fallback;
-          }
+          // Chrome 不能播放 TS → 必须用 MP4 fallback
+          el.src = config.fallback;
           el.load();
-          if (onReady) onReady();
+          el.addEventListener('loadedmetadata', function onFB() {
+            el.removeEventListener('loadedmetadata', onFB);
+            if (!hlsReady) { hlsReady = true; if (onReady) onReady(); }
+          });
+          el.addEventListener('error', function onFBErr() {
+            el.removeEventListener('error', onFBErr);
+            console.error('[HLS v12] ' + elementId + ': MP4 fallback also failed');
+            if (!hlsReady) { hlsReady = true; if (onReady) onReady(); }
+          });
         }
       });
 
       hlsInstances[elementId] = hls;
-    } else if (store && store.tsBlobUrl) {
-      // hls.js 不可用但有 Blob：直接设 src
-      console.log('[HLS v11] ' + elementId + ': No hls.js, using TS Blob URL');
+    } else if (store && store.tsBlobUrl && (isSafari || isIOSSafari)) {
+      // Safari 系可以直接播放 TS Blob URL
+      console.log('[HLS v12] ' + elementId + ': Safari fallback, using TS Blob URL');
       el.src = store.tsBlobUrl;
       el.load();
       el.addEventListener('loadedmetadata', function onMeta() {
@@ -602,54 +608,70 @@
         if (onReady) onReady();
       });
     } else {
-      // 极端降级
-      console.log('[HLS v11] ' + elementId + ': Full fallback mode');
+      // 极端降级 — 直接用 MP4 (所有浏览器都支持)
+      console.log('[HLS v12] ' + elementId + ': Full fallback to MP4');
       el.src = config.fallback;
       el.load();
-      if (onReady) onReady();
+      el.addEventListener('loadedmetadata', function onMeta() {
+        el.removeEventListener('loadedmetadata', onMeta);
+        if (onReady) onReady();
+      });
+      el.addEventListener('error', function onErr() {
+        el.removeEventListener('error', onErr);
+        console.error('[HLS v12] ' + elementId + ': Even MP4 fallback failed');
+        if (onReady) onReady();
+      });
     }
   }
 
   // ==========================================
-  //  自定义 hls.js Blob Loader
-  //  拦截 m3u8 和 TS 文件的请求，从内存 Blob 返回
+  //  hls.js 自定义 Loader Class（v12 重写）
+  //  必须是一个 class（构造函数），hls.js 会 new 它
+  //  拦截 m3u8 manifest 和 TS fragment 请求，从内存 Blob 返回
   // ==========================================
-  function createBlobLoader(store) {
-    return function (config) {
-      var loader = new Hls.DefaultConfig.loader(config);
-      var originalLoad = loader.load.bind(loader);
+  function createBlobLoaderClass(store) {
+    // hls.js 要求 loader 是一个构造函数/class
+    function BlobLoader(config) {
+      this.config = config;
+      this.stats = { trequest: 0, tfirst: 0, tload: 0, loaded: 0, total: 0, retry: 0, aborted: false };
+      this.context = null;
+      this.callbacks = null;
+    }
 
-      loader.load = function (context, loaderConfig, callbacks) {
-        var url = context.url;
+    BlobLoader.prototype.destroy = function () {
+      this.callbacks = null;
+      this.context = null;
+    };
 
-        // 拦截 m3u8 请求
-        if (url.indexOf('.m3u8') !== -1 && store.m3u8Text) {
-          console.log('[HLS v11 BlobLoader] Serving m3u8 from memory');
-          // 改写 m3u8 内容中的 TS 文件名为 Blob URL
-          var rewrittenM3u8 = store.m3u8Text;
-          if (store.tsBlobUrl && store.tsFileName) {
-            rewrittenM3u8 = rewrittenM3u8.replace(store.tsFileName, store.tsBlobUrl);
-          }
-          var response = {
-            url: url,
-            data: rewrittenM3u8
-          };
-          var stats = {
-            trequest: performance.now(),
-            tfirst: performance.now(),
-            tload: performance.now(),
-            loaded: rewrittenM3u8.length,
-            total: rewrittenM3u8.length
-          };
-          callbacks.onSuccess(response, stats, context, null);
+    BlobLoader.prototype.abort = function () {
+      this.stats.aborted = true;
+    };
+
+    BlobLoader.prototype.load = function (context, config, callbacks) {
+      this.context = context;
+      this.callbacks = callbacks;
+
+      var url = context.url;
+      var self = this;
+
+      // ---- 拦截 m3u8 (manifest/level) 请求 ----
+      if (context.type === 'manifest' || context.type === 'level' || url.indexOf('.m3u8') !== -1) {
+        if (store.m3u8Text) {
+          console.log('[HLS v12 BlobLoader] Serving m3u8 from memory for: ' + url);
+          var now = performance.now();
+          self.stats = { trequest: now, tfirst: now, tload: now, loaded: store.m3u8Text.length, total: store.m3u8Text.length, retry: 0, aborted: false };
+          // 不改写 m3u8 内容，保留原始 TS 文件名（loader 会拦截 TS 请求）
+          var response = { url: url, data: store.m3u8Text };
+          callbacks.onSuccess(response, self.stats, context, null);
           return;
         }
+      }
 
-        // 拦截 TS 请求 — 如果 URL 是 Blob URL 或匹配 TS 文件名
-        if ((url.indexOf('.ts') !== -1 || url.indexOf('blob:') === 0) && store.tsBlob) {
-          console.log('[HLS v11 BlobLoader] Serving TS from Blob (' + (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB)');
-          
-          // 处理 byte-range 请求
+      // ---- 拦截 TS fragment 请求 ----
+      if (context.type === 'fragment' || url.indexOf('.ts') !== -1) {
+        if (store.tsBlob) {
+          console.log('[HLS v12 BlobLoader] Serving TS from Blob (' + (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB) for: ' + url);
+
           var rangeStart = 0;
           var rangeEnd = store.tsBlob.size;
           if (context.rangeStart !== undefined && context.rangeEnd !== undefined) {
@@ -658,39 +680,48 @@
           }
 
           var slice = store.tsBlob.slice(rangeStart, rangeEnd);
-          var reader = new FileReader();
-          reader.onload = function () {
-            var response = {
-              url: url,
-              data: reader.result
-            };
-            var stats = {
-              trequest: performance.now(),
-              tfirst: performance.now(),
-              tload: performance.now(),
-              loaded: slice.size,
-              total: slice.size
-            };
-            callbacks.onSuccess(response, stats, context, null);
-          };
-          reader.onerror = function () {
-            callbacks.onError({ code: 0, text: 'Blob read error' }, context, null, stats);
-          };
 
-          if (context.responseType === 'arraybuffer') {
-            reader.readAsArrayBuffer(slice);
-          } else {
-            reader.readAsArrayBuffer(slice);
-          }
+          // 用 Response + arrayBuffer() 代替 FileReader（更现代、更可靠）
+          var blobResponse = new Response(slice);
+          blobResponse.arrayBuffer().then(function (buf) {
+            var now = performance.now();
+            self.stats = { trequest: now, tfirst: now, tload: now, loaded: buf.byteLength, total: buf.byteLength, retry: 0, aborted: false };
+            var response = { url: url, data: buf };
+            if (self.callbacks) {
+              self.callbacks.onSuccess(response, self.stats, context, null);
+            }
+          }).catch(function (err) {
+            console.error('[HLS v12 BlobLoader] Failed to read TS blob:', err);
+            if (self.callbacks && self.callbacks.onError) {
+              self.callbacks.onError({ code: 0, text: 'Blob read error: ' + err.message }, context, null, self.stats);
+            }
+          });
           return;
         }
+      }
 
-        // 其他请求走默认 loader
-        originalLoad(context, loaderConfig, callbacks);
-      };
-
-      return loader;
+      // ---- 其他请求：走网络 fetch ----
+      console.log('[HLS v12 BlobLoader] Fetching from network: ' + url);
+      fetch(url).then(function (resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.arrayBuffer();
+      }).then(function (buf) {
+        var now = performance.now();
+        self.stats = { trequest: now, tfirst: now, tload: now, loaded: buf.byteLength, total: buf.byteLength, retry: 0, aborted: false };
+        var isText = url.indexOf('.m3u8') !== -1;
+        var response = { url: url, data: isText ? new TextDecoder().decode(buf) : buf };
+        if (self.callbacks) {
+          self.callbacks.onSuccess(response, self.stats, context, null);
+        }
+      }).catch(function (err) {
+        console.error('[HLS v12 BlobLoader] Network fallback failed:', err);
+        if (self.callbacks && self.callbacks.onError) {
+          self.callbacks.onError({ code: 0, text: err.message }, context, null, self.stats);
+        }
+      });
     };
+
+    return BlobLoader;
   }
 
   // ==========================================
@@ -704,7 +735,7 @@
     var unlock = function () {
       if (mediaUnlocked) return;
       mediaUnlocked = true;
-      console.log('[HLS v11] User interaction detected, unlocking media');
+      console.log('[HLS v12] User interaction detected, unlocking media');
 
       document.removeEventListener('touchstart', unlock, true);
       document.removeEventListener('touchend', unlock, true);
@@ -762,7 +793,7 @@
     // ========================================
     checkAllCached().then(function (cacheCheck) {
       if (cacheCheck.allCached) {
-        console.log('[HLS v11] ✅ All files found in Cache API! Loading from cache...');
+        console.log('[HLS v12] ✅ All files found in Cache API! Loading from cache...');
         if (statusText) statusText.textContent = '⚡ 从本地缓存加载中...';
         if (progressFill) progressFill.style.width = '80%';
         updateDownloadListUI('cached');
@@ -804,7 +835,7 @@
       });
 
       if (cachedIds.length > 0) {
-        console.log('[HLS v11] Partial cache hit: ' + cachedIds.join(', ') + ' from cache; downloading: ' + uncachedIds.join(', '));
+        console.log('[HLS v12] Partial cache hit: ' + cachedIds.join(', ') + ' from cache; downloading: ' + uncachedIds.join(', '));
       }
 
       return startDownloadFlow(resourceIds, cachedIds, progressFill, progressText, statusText, loadingOverlay, modeCards);
@@ -818,7 +849,7 @@
     // 更新下载文件列表 UI
     updateDownloadListUI('preparing');
 
-    console.log('[HLS v11] Starting download (with resume support)');
+    console.log('[HLS v12] Starting download (with resume support)');
 
     // 收集需要下载的文件
     var downloads = [];
@@ -910,19 +941,19 @@
           blobStore[dl.id].tsBlobUrl = URL.createObjectURL(result.blob);
           var parts = dl.url.split('/');
           blobStore[dl.id].tsFileName = parts[parts.length - 1];
-          console.log('[HLS v11] ✓ TS ready: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB' + (result.fromCache ? ', cached' : '') + ')');
+          console.log('[HLS v12] ✓ TS ready: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB' + (result.fromCache ? ', cached' : '') + ')');
         } else if (dl.type === 'm3u8') {
           blobStore[dl.id].m3u8Blob = result.blob;
           return result.blob.text().then(function (text) {
             blobStore[dl.id].m3u8Text = text;
-            console.log('[HLS v11] ✓ m3u8 ready: ' + dl.url);
+            console.log('[HLS v12] ✓ m3u8 ready: ' + dl.url);
           });
         }
 
         updateProgressUI();
         return { success: true };
       }).catch(function (err) {
-        console.error('[HLS v11] ✗ Failed: ' + dl.url, err.message);
+        console.error('[HLS v12] ✗ Failed: ' + dl.url, err.message);
         failedDownloads.push(dl);
         return { success: false, error: err };
       });
@@ -943,7 +974,7 @@
         return;
       }
 
-      console.log('[HLS v11] ✅ All files ready! Initializing players...');
+      console.log('[HLS v12] ✅ All files ready! Initializing players...');
       initPlayersAfterDownload(resourceIds, progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
     });
   }
@@ -965,14 +996,14 @@
         setupPlayerFromBlob(id,
           function onReady() {
             setupCompleted++;
-            console.log('[HLS v11] Player ready: ' + id + ' (' + setupCompleted + '/' + totalSetups + ')');
+            console.log('[HLS v12] Player ready: ' + id + ' (' + setupCompleted + '/' + totalSetups + ')');
             if (setupCompleted >= totalSetups) {
               finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
             }
           },
           function onError() {
             setupCompleted++;
-            console.warn('[HLS v11] Player setup had issues: ' + id);
+            console.warn('[HLS v12] Player setup had issues: ' + id);
             if (setupCompleted >= totalSetups) {
               finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
             }
@@ -983,7 +1014,7 @@
       // 超时保护
       setTimeout(function () {
         if (!loadingComplete) {
-          console.warn('[HLS v11] Player init timeout, forcing entry');
+          console.warn('[HLS v12] Player init timeout, forcing entry');
           finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
         }
       }, 15000);
@@ -1046,7 +1077,7 @@
     if (loadingComplete) return;
     loadingComplete = true;
 
-    console.log('[HLS v11] ✅ All resources ready. Entering app!');
+    console.log('[HLS v12] ✅ All resources ready. Entering app!');
 
     var totalMB = 0;
     Object.keys(blobStore).forEach(function (id) {

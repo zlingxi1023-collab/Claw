@@ -1,24 +1,24 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v8
+ * Six Little Ducks - HLS 媒体加载器 v9
  * 
  * 核心原则：所有媒体文件就绪后才允许进入，但兼容 iOS 设备内存限制
  * 
- * v8 变更：
+ * v9 变更：
+ * - 音频 HLS 从 byte-range 单文件模式改为独立分片模式（修复 CF Pages 不支持 Range 的问题）
+ * - 视频 HLS 重新编码为均匀 2 秒分片（消除大分片导致的 12 秒卡顿）
+ * - hls.js 配置优化：更激进的预缓冲 + 低延迟分片加载策略
+ * - iOS Safari：使用原生 HLS 播放 m3u8（所有分片已改为独立模式，无需 Range 请求）
+ * - 新增 Cloudflare Pages _headers 配置支持
+ * 
+ * v8 变更（保留）：
  * - 适配 Cloudflare Pages 部署（单文件 25MB 限制）
  * - MP4 视频压缩至 25MB 以内（CRF 28，H.264 Main profile）
- * - HLS 从 byte-range 单文件模式改为独立分片模式（seg000.ts ~ segNNN.ts）
- * - 桌面端预下载改为只下载 m3u8 播放列表，分片由 hls.js 按需加载
- * - 移除 HLS_SOURCES 中的 ts 字段（不再有单个大 seg.ts 文件）
  * 
  * v7 变更（保留）：
  * - 后台缓存改用隐藏 <video>/<audio> 原生预加载
  * 
  * v6 变更（保留）：
  * - 修复 iOS 路径 loadingComplete 双重设置导致永远卡在"初始化播放器"的 bug
- * 
- * v5 变更（保留）：
- * - iOS 设备不再预下载大文件，改用 MP4 流式播放
- * - 非 iOS 设备保留预下载机制（桌面端内存充足）
  * 
  * 非 iOS 模式：
  * - 预下载 m3u8 播放列表（HLS 分片由 hls.js 按需加载）
@@ -266,14 +266,13 @@
       return;
     }
 
-    // iOS Safari：使用 MP4 fallback 而非原生 HLS
-    // 原因：Safari 原生 HLS（single_file byterange 模式）对 seek 操作支持有缺陷
-    //       未缓冲区域的 seek 会静默失败，导致歌词点击跳转和 AB 循环不工作
-    //       MP4 有完整的 moov atom，Safari 对 MP4 的 seek 支持非常好
+    // iOS Safari：优先使用原生 HLS 播放 m3u8
+    // v9：所有 HLS 分片已改为独立文件模式（不再使用 byte-range），Safari 原生 HLS 可以正常工作
+    // 如果原生 HLS 失败（如网络问题），降级到 MP4 fallback
     if (isIOSSafari) {
-      console.log('[HLS] ' + elementId + ': iOS detected, using MP4 streaming (no preload download)');
-      el.src = config.fallback;
-      el.preload = 'metadata'; // 仅加载元数据，不预下载整个文件
+      console.log('[HLS] ' + elementId + ': iOS detected, trying native HLS first (independent segments)');
+      el.src = config.hls;
+      el.preload = 'auto'; // iOS 原生 HLS 可以 auto 预加载
 
       var iosReady = false;
       function iosDone() {
@@ -282,15 +281,30 @@
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
-        console.log('[HLS] ' + elementId + ': Ready (iOS MP4 streaming)');
+        console.log('[HLS] ' + elementId + ': Ready (iOS native HLS)');
         if (onReady) onReady();
       }
 
       var iosOnMeta = function () { iosDone(); };
       var iosOnCanPlay = function () { iosDone(); };
       var iosOnErr = function () {
-        console.warn('[HLS] ' + elementId + ': iOS MP4 load error (will retry on play)');
-        iosDone(); // 即使出错也放行 — play 时浏览器会自动重试
+        console.warn('[HLS] ' + elementId + ': iOS native HLS failed, falling back to MP4');
+        el.removeEventListener('loadedmetadata', iosOnMeta);
+        el.removeEventListener('canplay', iosOnCanPlay);
+        el.removeEventListener('error', iosOnErr);
+        // 降级到 MP4
+        el.src = config.fallback;
+        el.preload = 'metadata';
+        el.addEventListener('loadedmetadata', function onFallback() {
+          el.removeEventListener('loadedmetadata', onFallback);
+          iosDone();
+        });
+        el.addEventListener('error', function onFallbackErr() {
+          el.removeEventListener('error', onFallbackErr);
+          console.warn('[HLS] ' + elementId + ': iOS MP4 also failed (will retry on play)');
+          iosDone(); // 即使出错也放行 — play 时浏览器会自动重试
+        });
+        el.load();
       };
 
       el.addEventListener('loadedmetadata', iosOnMeta);
@@ -298,13 +312,13 @@
       el.addEventListener('error', iosOnErr);
       el.load();
 
-      // 超时保护：8 秒后放行（MP4 metadata 加载应该很快）
+      // 超时保护：10 秒后放行
       setTimeout(function () {
         if (!iosReady) {
-          console.warn('[HLS] ' + elementId + ': iOS MP4 metadata timeout, proceeding');
+          console.warn('[HLS] ' + elementId + ': iOS HLS timeout, proceeding');
           iosDone();
         }
-      }, 8000);
+      }, 10000);
       return;
     }
 
@@ -367,10 +381,23 @@
       }
 
       var hls = new Hls({
-        maxBufferLength: 120,
-        maxMaxBufferLength: 300,
-        maxBufferSize: 200 * 1024 * 1024,
+        // === 缓冲策略优化 ===
+        maxBufferLength: 30,          // 前方最大缓冲 30 秒（默认 30）
+        maxMaxBufferLength: 120,      // 允许最多缓冲 120 秒
+        maxBufferSize: 60 * 1024 * 1024,  // 最大缓冲 60MB
+        maxBufferHole: 0.5,           // 允许 0.5s 的缓冲空洞
+        // === 预加载策略 ===
         startPosition: 0,
+        backBufferLength: 30,         // 保留 30 秒的回退缓冲
+        // === 分片加载优化 ===
+        maxFragLookUpTolerance: 0.25, // 分片查找容差
+        startFragPrefetch: true,      // 启动时预取分片
+        // === 错误恢复 ===
+        fragLoadingMaxRetry: 4,       // 分片加载失败最多重试 4 次
+        fragLoadingRetryDelay: 500,   // 重试延迟 500ms
+        fragLoadingMaxRetryTimeout: 8000, // 最大重试超时 8 秒
+        // === 低延迟 ===
+        lowLatencyMode: false,        // VOD 不需要低延迟模式
         debug: false
       });
 
@@ -438,7 +465,7 @@
   }
 
   // ==========================================
-  //  预加载系统 v6：iOS 流式 + 非 iOS 预下载 + 后台缓存
+  //  预加载系统 v9：iOS 原生 HLS + 非 iOS hls.js + 后台缓存
   // ==========================================
 
   // 全局状态
@@ -485,12 +512,13 @@
     console.log('[HLS] iOS detected — using streaming mode (no full download)');
 
     var resourceIds = Object.keys(HLS_SOURCES);
-    // iOS 只需验证 MP4 fallback 文件可访问
-    var fallbackFiles = resourceIds.map(function (id) {
-      return { id: id, url: HLS_SOURCES[id].fallback, name: HLS_SOURCES[id].name };
+    // iOS v9：验证 HLS m3u8 播放列表（所有分片已改为独立模式，Safari 原生 HLS 可正常工作）
+    // 同时验证 MP4 fallback 作为备用
+    var checkFiles = resourceIds.map(function (id) {
+      return { id: id, url: HLS_SOURCES[id].hls, fallbackUrl: HLS_SOURCES[id].fallback, name: HLS_SOURCES[id].name };
     });
 
-    var totalFiles = fallbackFiles.length;
+    var totalFiles = checkFiles.length;
     var checkedCount = 0;
     var failedFiles = [];
 
@@ -499,12 +527,12 @@
     updateProgressUI_iOS(progressFill, progressText, 0, totalFiles);
     hideRetryButton();
 
-    fallbackFiles.forEach(function (file) {
-      // 使用 HEAD 请求验证文件存在且可访问
+    checkFiles.forEach(function (file) {
+      // 验证 HLS m3u8 播放列表可访问
       fetch(file.url, { method: 'HEAD' })
         .then(function (resp) {
           if (resp.ok) {
-            console.log('[HLS iOS] ✓ Accessible: ' + file.url + ' (' + resp.headers.get('Content-Length') + ' bytes)');
+            console.log('[HLS iOS] ✓ Accessible: ' + file.url);
           } else {
             console.warn('[HLS iOS] ✗ HTTP ' + resp.status + ': ' + file.url);
             failedFiles.push(file);
@@ -530,7 +558,7 @@
           updateProgressUI_iOS(progressFill, progressText, checkedCount, totalFiles);
 
           if (checkedCount >= totalFiles) {
-            if (failedFiles.length === fallbackFiles.length) {
+            if (failedFiles.length === checkFiles.length) {
               // 所有文件都失败
               if (statusText) statusText.textContent = '❌ 网络连接失败，请检查网络后重试';
               showRetryButton();
@@ -738,7 +766,8 @@
     var resourceIds = Object.keys(HLS_SOURCES);
     resourceIds.forEach(function (id) {
       var source = HLS_SOURCES[id];
-      var url = source.fallback;
+      // v9: 使用 HLS m3u8 进行后台预加载（独立分片模式）
+      var url = source.hls;
       var tag = source.type === 'video' ? 'video' : 'audio';
       var el = document.createElement(tag);
       el.preload = 'auto';
@@ -746,7 +775,6 @@
       el.playsInline = true;
       el.src = url;
       el.style.display = 'none';
-      // load() 触发浏览器原生缓存（Range 请求），无需手动管理
       el.load();
       document.body.appendChild(el);
       console.log('[HLS iOS] Background preload started: ' + url);

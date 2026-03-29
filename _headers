@@ -1,0 +1,35 @@
+# Cloudflare Pages Custom Headers
+# 媒体文件缓存策略 + CORS
+
+# HLS 分片文件 - 长缓存（内容不变）
+/media/hls/*
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+# m3u8 播放列表 - 短缓存（可能会更新切片方式）
+/media/hls/*/index.m3u8
+  Cache-Control: public, max-age=3600
+  Access-Control-Allow-Origin: *
+  Content-Type: application/vnd.apple.mpegurl
+
+# MP4 视频 - 中等缓存
+/media/*.mp4
+  Cache-Control: public, max-age=86400
+  Access-Control-Allow-Origin: *
+
+# MP3 音频 - 中等缓存
+/media/*.mp3
+  Cache-Control: public, max-age=86400
+  Access-Control-Allow-Origin: *
+
+# 所有页面 - 短缓存
+/
+  Cache-Control: public, max-age=300
+/index.html
+  Cache-Control: public, max-age=300
+
+# JS/CSS - 中等缓存
+/js/*
+  Cache-Control: public, max-age=3600
+/css/*
+  Cache-Control: public, max-age=3600

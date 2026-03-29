@@ -783,6 +783,42 @@ html, body {
 }
 
 /* ============================================
+   播放倍速按钮
+   ============================================ */
+.speed-btn {
+  width: auto !important;
+  min-width: 38px;
+  padding: 0 8px;
+  font-size: 0;
+  position: relative;
+}
+.speed-btn .speed-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+.speed-btn.speed-active {
+  background: rgba(78, 205, 196, 0.2);
+  box-shadow: 0 0 10px rgba(78, 205, 196, 0.15);
+}
+.speed-btn.speed-active .speed-label {
+  color: var(--duck2);
+  font-weight: 800;
+}
+.speed-btn:hover .speed-label {
+  color: white;
+}
+
+/* 视频控制栏中的倍速按钮尺寸 */
+.video-controls .speed-btn {
+  min-width: 34px;
+  height: 38px;
+}
+
+/* ============================================
    AB段循环控件
    ============================================ */
 .ab-loop-range {

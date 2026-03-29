@@ -10,6 +10,10 @@
   let perfEngine = null;
   let pracEngine = null;
 
+  // 播放倍速选项
+  const SPEED_OPTIONS = [0.5, 0.75, 0.8, 1];
+  let currentSpeedIndex = 3; // 默认1x（索引3）
+
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -376,6 +380,12 @@
         setupPlayPauseIcons('#perf-play-btn', audio);
         syncPerfVideo(audio, video);
         perfEngineInited = true;
+        // 应用当前倍速
+        const rate = SPEED_OPTIONS[currentSpeedIndex];
+        if (rate !== 1) {
+          perfEngine.setPlaybackRate(rate);
+          video.playbackRate = rate;
+        }
       }
 
       perfEngine.setRole(selectedRole);
@@ -394,6 +404,11 @@
         pracEngine.init(video, 'practice');
         setupPlayPauseIcons('#prac-play-btn', video);
         pracEngineInited = true;
+        // 应用当前倍速
+        const rate = SPEED_OPTIONS[currentSpeedIndex];
+        if (rate !== 1) {
+          pracEngine.setPlaybackRate(rate);
+        }
       }
 
       pracEngine.setRole(selectedRole);
@@ -417,6 +432,7 @@
     // 伴奏播放时同步启动视频
     audio.addEventListener('play', () => {
       video.currentTime = audio.currentTime;
+      video.playbackRate = audio.playbackRate; // 同步倍速
       video.play().catch(() => {});
     });
 
@@ -446,6 +462,42 @@
       if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
       video.pause();
     });
+  }
+
+  // ==========================================
+  //  播放倍速切换
+  // ==========================================
+  function cyclePlaybackSpeed(mode) {
+    currentSpeedIndex = (currentSpeedIndex + 1) % SPEED_OPTIONS.length;
+    const rate = SPEED_OPTIONS[currentSpeedIndex];
+
+    // 更新两个引擎的播放倍速（保持同步）
+    if (perfEngine) {
+      perfEngine.setPlaybackRate(rate);
+      // 表演模式：视频也需要同步倍速
+      const perfVideo = $('#perf-video');
+      if (perfVideo) perfVideo.playbackRate = rate;
+    }
+    if (pracEngine) {
+      pracEngine.setPlaybackRate(rate);
+    }
+
+    // 更新所有倍速按钮的显示
+    updateSpeedButtonLabels(rate);
+  }
+
+  function updateSpeedButtonLabels(rate) {
+    const label = rate === 1 ? '1x' : rate + 'x';
+    const perfLabel = $('#perf-speed-btn .speed-label');
+    const pracLabel = $('#prac-speed-btn .speed-label');
+    if (perfLabel) perfLabel.textContent = label;
+    if (pracLabel) pracLabel.textContent = label;
+
+    // 非1x时高亮按钮
+    const perfBtn = $('#perf-speed-btn');
+    const pracBtn = $('#prac-speed-btn');
+    if (perfBtn) perfBtn.classList.toggle('speed-active', rate !== 1);
+    if (pracBtn) pracBtn.classList.toggle('speed-active', rate !== 1);
   }
 
   function setupPlayPauseIcons(btnSelector, media) {
@@ -725,6 +777,11 @@
       toggleFullscreen(performanceMode);
     });
 
+    // 倍速按钮
+    $('#perf-speed-btn').addEventListener('click', () => {
+      cyclePlaybackSpeed('performance');
+    });
+
     // 切换到练习模式
     const switchBtn = $('#perf-switch-mode');
     if (switchBtn) {
@@ -892,6 +949,11 @@
     $('#prac-switch-mode').addEventListener('click', () => {
       goBack();
       setTimeout(() => switchMode('performance'), 150);
+    });
+
+    // 倍速按钮
+    $('#prac-speed-btn').addEventListener('click', () => {
+      cyclePlaybackSpeed('practice');
     });
 
     bindProgressBar('#prac-progress-bar', () => pracEngine);

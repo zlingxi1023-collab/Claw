@@ -22,6 +22,9 @@ class LyricEngine {
     this.loopA = null;
     this.loopB = null;
     this.onLoopChange = null;
+    // 播放倍速
+    this.playbackRate = 1;
+    this.onPlaybackRateChange = null;
     // 自动重播回调
     this.onAutoplayBlocked = null;
     this.autoLoop = true; // 默认播放结束自动重播
@@ -48,6 +51,11 @@ class LyricEngine {
     this.mediaElement.addEventListener('pause', this._onPause);
     this.mediaElement.addEventListener('ended', this._onEnded);
     this.mediaElement.addEventListener('seeked', this._onSeeked);
+
+    // 应用已保存的播放倍速
+    if (this.playbackRate !== 1) {
+      this.mediaElement.playbackRate = this.playbackRate;
+    }
   }
 
   togglePlay() {
@@ -119,6 +127,21 @@ class LyricEngine {
   getCurrentTime() { return this.mediaElement ? this.mediaElement.currentTime : 0; }
   getDuration() { return this.mediaElement ? this.mediaElement.duration || 0 : 0; }
   getIsPlaying() { return this.isPlaying; }
+
+  // === 播放倍速 ===
+  setPlaybackRate(rate) {
+    this.playbackRate = rate;
+    if (this.mediaElement) {
+      this.mediaElement.playbackRate = rate;
+    }
+    if (this.onPlaybackRateChange) {
+      this.onPlaybackRateChange(rate);
+    }
+  }
+
+  getPlaybackRate() {
+    return this.mediaElement ? this.mediaElement.playbackRate : (this.playbackRate || 1);
+  }
 
   // === AB段循环 ===
   setLoopA(time) {
@@ -252,6 +275,7 @@ class LyricEngine {
     this.onActionChange = null;
     this.onFormationChange = null;
     this.onLoopChange = null;
+    this.onPlaybackRateChange = null;
     this.onAutoplayBlocked = null;
     this._inited = false;
   }

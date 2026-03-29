@@ -1,16 +1,16 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v10
+ * Six Little Ducks - HLS 媒体加载器 v11
  * 
  * 核心架构：先下载后播放（Download-then-Play）
  * 
- * v10 重大变更：
+ * v11 变更：
+ * - Cache API 持久化：下载的文件存入 Cache Storage，关闭/刷新浏览器不丢失
+ * - 启动时缓存完整性检查：所有文件已缓存 → 秒开，跳过下载
+ * - 断点续传：下载中断后，下次从已下载位置继续（部分数据暂存 + 合并）
  * - 每个媒体流使用单个完整 TS 文件（不分片）
- * - 打开页面先完整下载所有 TS 文件，显示下载进度条
  * - 下载完成后创建 Blob URL，本地播放
  * - Chrome/桌面：hls.js 自定义 loader 从 Blob 读取
- * - iOS Safari/iPad：直接用 Blob URL 设 video.src（Safari 原生支持 TS）
- * - 全平台兼容：iPhone Safari, iPad Safari, Chrome, macOS Safari
- * - 彻底解决 CF Pages 不支持 206 Range 请求的问题
+ * - iOS Safari/iPad：直接用 Blob URL（Safari 原生支持 TS）
  * 
  * 保持 window.HLSLoader.preloadAllResourcesHLS() 接口不变
  */
@@ -21,7 +21,8 @@
   // ==========================================
   //  缓存配置
   // ==========================================
-  var CACHE_NAME = 'six-little-ducks-media-v2';
+  var CACHE_NAME = 'six-little-ducks-media-v3';
+  var PARTIAL_CACHE_NAME = 'six-little-ducks-partial-v1'; // 断点续传的部分数据
   var cacheAvailable = 'caches' in window;
 
   // ==========================================
@@ -87,13 +88,13 @@
       script.onload = function () {
         hlsJsLoaded = true;
         hlsJsLoading = false;
-        console.log('[HLS v10] hls.js loaded successfully');
+        console.log('[HLS v11] hls.js loaded successfully');
         hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
       script.onerror = function () {
         hlsJsLoading = false;
-        console.warn('[HLS v10] Failed to load hls.js from CDN');
+        console.warn('[HLS v11] Failed to load hls.js from CDN');
         hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
@@ -126,33 +127,153 @@
     return caches.open(CACHE_NAME).then(function (cache) {
       return cache.put(absUrl, response);
     }).catch(function (err) {
-      console.warn('[HLS v10 Cache] Failed to cache ' + url + ':', err.message);
+      console.warn('[HLS v11 Cache] Failed to cache ' + url + ':', err.message);
     });
   }
 
   // ==========================================
-  //  带进度的 fetch 下载（含重试 + 缓存优先）
+  //  断点续传：部分数据暂存（用 Cache API 存储已下载的 chunk）
+  // ==========================================
+  function getPartialKey(url) {
+    return toAbsoluteURL(url) + '::partial';
+  }
+
+  function savePartialData(url, blob) {
+    if (!cacheAvailable) return Promise.resolve();
+    var key = getPartialKey(url);
+    var resp = new Response(blob, {
+      status: 200,
+      headers: { 'X-Partial-Size': String(blob.size) }
+    });
+    return caches.open(PARTIAL_CACHE_NAME).then(function (cache) {
+      return cache.put(key, resp);
+    }).catch(function () {});
+  }
+
+  function getPartialData(url) {
+    if (!cacheAvailable) return Promise.resolve(null);
+    var key = getPartialKey(url);
+    return caches.open(PARTIAL_CACHE_NAME).then(function (cache) {
+      return cache.match(key);
+    }).then(function (resp) {
+      if (!resp) return null;
+      return resp.blob().then(function (blob) {
+        return blob.size > 0 ? blob : null;
+      });
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function clearPartialData(url) {
+    if (!cacheAvailable) return Promise.resolve();
+    var key = getPartialKey(url);
+    return caches.open(PARTIAL_CACHE_NAME).then(function (cache) {
+      return cache.delete(key);
+    }).catch(function () {});
+  }
+
+  // ==========================================
+  //  缓存完整性检查：启动时检测所有文件是否已完整缓存
+  // ==========================================
+  function checkAllCached() {
+    if (!cacheAvailable) return Promise.resolve({ allCached: false, results: {} });
+
+    var resourceIds = Object.keys(HLS_SOURCES);
+    var checks = [];
+    var results = {};
+
+    resourceIds.forEach(function (id) {
+      var config = HLS_SOURCES[id];
+
+      // 检查 TS 文件
+      checks.push(
+        getFromCache(config.ts).then(function (resp) {
+          if (resp) {
+            return resp.clone().blob().then(function (blob) {
+              // 文件大于 100KB 认为有效（排除错误页面等）
+              results[id] = { cached: blob.size > 102400, tsBlob: blob, tsSize: blob.size };
+              return null;
+            });
+          }
+          results[id] = { cached: false, tsBlob: null, tsSize: 0 };
+        })
+      );
+
+      // 检查 m3u8 文件
+      checks.push(
+        getFromCache(config.hls).then(function (resp) {
+          if (resp) {
+            return resp.clone().blob().then(function (blob) {
+              return blob.text().then(function (text) {
+                if (!results[id]) results[id] = {};
+                results[id].m3u8Cached = text.length > 10;
+                results[id].m3u8Text = text;
+              });
+            });
+          }
+          if (!results[id]) results[id] = {};
+          results[id].m3u8Cached = false;
+        })
+      );
+    });
+
+    return Promise.all(checks).then(function () {
+      var allCached = true;
+      resourceIds.forEach(function (id) {
+        if (!results[id] || !results[id].cached || !results[id].m3u8Cached) {
+          allCached = false;
+        }
+      });
+      return { allCached: allCached, results: results };
+    });
+  }
+
+  // ==========================================
+  //  带进度的 fetch 下载（含断点续传 + 缓存）
   // ==========================================
   function fetchWithProgress(url, onProgress, maxRetries) {
     maxRetries = maxRetries || 3;
 
+    // 第 1 步：检查完整缓存
     return getFromCache(url).then(function (cachedResponse) {
       if (cachedResponse) {
-        console.log('[HLS v10 Cache] ✓ HIT: ' + url);
+        console.log('[HLS v11 Cache] ✓ HIT: ' + url);
         return cachedResponse.blob().then(function (blob) {
-          if (onProgress) onProgress(blob.size, blob.size);
-          return { blob: blob, fromCache: true };
+          if (blob.size > 102400 || url.indexOf('.m3u8') !== -1) {
+            if (onProgress) onProgress(blob.size, blob.size);
+            return { blob: blob, fromCache: true };
+          }
+          // 缓存文件太小，可能是错误响应，重新下载
+          console.warn('[HLS v11 Cache] Cached file too small (' + blob.size + 'B), re-downloading');
+          return doDownloadWithResume(url, onProgress, maxRetries);
         });
       }
 
-      console.log('[HLS v10 Cache] ✗ MISS: ' + url + ' → downloading');
-      return fetchFromNetwork(url, onProgress, maxRetries).then(function (blob) {
-        // 异步存入缓存
+      console.log('[HLS v11 Cache] ✗ MISS: ' + url + ' → checking partial data');
+      return doDownloadWithResume(url, onProgress, maxRetries);
+    });
+  }
+
+  // 带断点续传的下载
+  function doDownloadWithResume(url, onProgress, maxRetries) {
+    // 第 2 步：检查是否有部分下载的数据
+    return getPartialData(url).then(function (partialBlob) {
+      var resumeOffset = partialBlob ? partialBlob.size : 0;
+
+      if (resumeOffset > 0) {
+        console.log('[HLS v11 Resume] Found partial data for ' + url + ': ' + (resumeOffset / 1024 / 1024).toFixed(1) + ' MB, resuming...');
+      }
+
+      return fetchFromNetworkResumable(url, resumeOffset, partialBlob, onProgress, maxRetries).then(function (blob) {
+        // 下载完成，存入完整缓存
         var responseToCache = new Response(blob.slice(0), {
           status: 200,
           headers: { 'Content-Type': guessContentType(url), 'Content-Length': String(blob.size) }
         });
         putToCache(url, responseToCache);
+        // 清除部分数据缓存
+        clearPartialData(url);
         return { blob: blob, fromCache: false };
       });
     });
@@ -166,46 +287,119 @@
     return 'application/octet-stream';
   }
 
-  function fetchFromNetwork(url, onProgress, maxRetries) {
+  function fetchFromNetworkResumable(url, resumeOffset, existingBlob, onProgress, maxRetries) {
     var attempt = 0;
 
     function tryFetch() {
       attempt++;
-      return fetch(url).then(function (response) {
-        if (!response.ok) throw new Error('HTTP ' + response.status + ' for ' + url);
+
+      var headers = {};
+      // 断点续传：从已下载位置继续
+      if (resumeOffset > 0) {
+        headers['Range'] = 'bytes=' + resumeOffset + '-';
+      }
+
+      return fetch(url, { headers: headers }).then(function (response) {
+        // 如果服务器不支持 Range（返回 200 而非 206），则从头下载
+        var isPartial = response.status === 206;
+        if (resumeOffset > 0 && !isPartial) {
+          console.log('[HLS v11 Resume] Server returned ' + response.status + ' (no Range support), downloading from start');
+          resumeOffset = 0;
+          existingBlob = null;
+        }
+
+        if (!response.ok && response.status !== 206) {
+          throw new Error('HTTP ' + response.status + ' for ' + url);
+        }
 
         var contentLength = response.headers.get('Content-Length');
-        var total = contentLength ? parseInt(contentLength, 10) : 0;
+        var remainingSize = contentLength ? parseInt(contentLength, 10) : 0;
+        var totalSize = resumeOffset + remainingSize;
 
-        if (!total || !response.body) {
-          return response.blob().then(function (blob) {
-            if (onProgress) onProgress(blob.size, blob.size);
-            return blob;
+        // 报告已有的进度
+        if (resumeOffset > 0 && onProgress) {
+          onProgress(resumeOffset, totalSize);
+        }
+
+        if (!response.body) {
+          return response.blob().then(function (newBlob) {
+            var finalBlob;
+            if (existingBlob && isPartial) {
+              finalBlob = new Blob([existingBlob, newBlob]);
+            } else {
+              finalBlob = newBlob;
+            }
+            if (onProgress) onProgress(finalBlob.size, finalBlob.size);
+            return finalBlob;
           });
         }
 
         var reader = response.body.getReader();
-        var loaded = 0;
+        var loaded = resumeOffset;
         var chunks = [];
+        var lastSaveTime = Date.now();
 
         return new Promise(function (resolve, reject) {
           function pump() {
             reader.read().then(function (result) {
               if (result.done) {
-                resolve(new Blob(chunks));
+                // 下载完成，合并所有数据
+                var newBlob = new Blob(chunks);
+                var finalBlob;
+                if (existingBlob && isPartial) {
+                  finalBlob = new Blob([existingBlob, newBlob]);
+                } else {
+                  finalBlob = newBlob;
+                }
+                resolve(finalBlob);
                 return;
               }
               chunks.push(result.value);
               loaded += result.value.length;
-              if (onProgress) onProgress(loaded, total);
+              if (onProgress) onProgress(loaded, totalSize || loaded);
+
+              // 每 5 秒保存一次部分数据（断点续传保护）
+              var now = Date.now();
+              if (now - lastSaveTime > 5000 && url.indexOf('.ts') !== -1) {
+                lastSaveTime = now;
+                var partialChunks = new Blob(chunks);
+                var partialFull;
+                if (existingBlob && isPartial) {
+                  partialFull = new Blob([existingBlob, partialChunks]);
+                } else {
+                  partialFull = partialChunks;
+                }
+                savePartialData(url, partialFull);
+                console.log('[HLS v11 Resume] Saved partial: ' + (partialFull.size / 1024 / 1024).toFixed(1) + ' MB');
+              }
+
               pump();
-            }).catch(reject);
+            }).catch(function (err) {
+              // 下载中断，保存已下载的部分数据
+              console.warn('[HLS v11 Resume] Download interrupted: ' + err.message);
+              if (chunks.length > 0 && url.indexOf('.ts') !== -1) {
+                var partialChunks = new Blob(chunks);
+                var partialFull;
+                if (existingBlob && isPartial) {
+                  partialFull = new Blob([existingBlob, partialChunks]);
+                } else {
+                  partialFull = partialChunks;
+                }
+                savePartialData(url, partialFull).then(function () {
+                  console.log('[HLS v11 Resume] Saved ' + (partialFull.size / 1024 / 1024).toFixed(1) + ' MB for next resume');
+                });
+                // 更新 resumeOffset，以便重试时继续
+                resumeOffset = partialFull.size;
+                existingBlob = partialFull;
+              }
+              reject(err);
+            });
           }
           pump();
         });
       }).catch(function (err) {
         if (attempt < maxRetries) {
-          console.warn('[HLS v10] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
+          console.warn('[HLS v11] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
           return new Promise(function (resolve) {
             setTimeout(resolve, 1000 * attempt);
           }).then(tryFetch);
@@ -223,14 +417,14 @@
   function setupPlayerFromBlob(elementId, onReady, onError) {
     var config = HLS_SOURCES[elementId];
     if (!config) {
-      console.warn('[HLS v10] Unknown element:', elementId);
+      console.warn('[HLS v11] Unknown element:', elementId);
       if (onError) onError();
       return;
     }
 
     var el = document.getElementById(elementId);
     if (!el) {
-      console.warn('[HLS v10] Element not found:', elementId);
+      console.warn('[HLS v11] Element not found:', elementId);
       if (onError) onError();
       return;
     }
@@ -242,7 +436,7 @@
     //  Safari 原生支持 TS 格式播放
     // ======================================
     if (isIOSSafari) {
-      console.log('[HLS v10] ' + elementId + ': iOS mode — using Blob URL directly');
+      console.log('[HLS v11] ' + elementId + ': iOS mode — using Blob URL directly');
 
       if (store && store.tsBlobUrl) {
         // 优先用 TS Blob URL
@@ -260,14 +454,14 @@
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
-        console.log('[HLS v10] ' + elementId + ': Ready (iOS Blob)');
+        console.log('[HLS v11] ' + elementId + ': Ready (iOS Blob)');
         if (onReady) onReady();
       }
 
       var iosOnMeta = function () { iosDone(); };
       var iosOnCanPlay = function () { iosDone(); };
       var iosOnErr = function () {
-        console.warn('[HLS v10] ' + elementId + ': iOS Blob URL failed, trying fallback MP4');
+        console.warn('[HLS v11] ' + elementId + ': iOS Blob URL failed, trying fallback MP4');
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
@@ -281,7 +475,7 @@
         });
         el.addEventListener('error', function onFBErr() {
           el.removeEventListener('error', onFBErr);
-          console.warn('[HLS v10] ' + elementId + ': iOS fallback also failed');
+          console.warn('[HLS v11] ' + elementId + ': iOS fallback also failed');
           iosDone();
         });
         el.load();
@@ -293,7 +487,7 @@
       el.load();
 
       // 超时保护
-      setTimeout(function () { if (!iosReady) { console.warn('[HLS v10] ' + elementId + ': iOS timeout'); iosDone(); } }, 10000);
+      setTimeout(function () { if (!iosReady) { console.warn('[HLS v11] ' + elementId + ': iOS timeout'); iosDone(); } }, 10000);
       return;
     }
 
@@ -303,7 +497,7 @@
     //  或者直接用 TS Blob URL
     // ======================================
     if (el.canPlayType('application/vnd.apple.mpegurl') && !hlsJsLoaded) {
-      console.log('[HLS v10] ' + elementId + ': Native HLS (Safari) — using TS Blob URL');
+      console.log('[HLS v11] ' + elementId + ': Native HLS (Safari) — using TS Blob URL');
 
       if (store && store.tsBlobUrl) {
         el.src = store.tsBlobUrl;
@@ -315,7 +509,7 @@
       function nativeDone() {
         if (nativeReady) return;
         nativeReady = true;
-        console.log('[HLS v10] ' + elementId + ': Ready (Native)');
+        console.log('[HLS v11] ' + elementId + ': Ready (Native)');
         if (onReady) onReady();
       }
 
@@ -325,7 +519,7 @@
       });
       el.addEventListener('error', function onErr() {
         el.removeEventListener('error', onErr);
-        console.warn('[HLS v10] ' + elementId + ': Native playback failed, trying fallback');
+        console.warn('[HLS v11] ' + elementId + ': Native playback failed, trying fallback');
         el.src = config.fallback;
         el.load();
         el.addEventListener('loadedmetadata', function onFB() {
@@ -335,7 +529,7 @@
       });
       el.load();
 
-      setTimeout(function () { if (!nativeReady) { console.warn('[HLS v10] ' + elementId + ': Native timeout'); nativeDone(); } }, 15000);
+      setTimeout(function () { if (!nativeReady) { console.warn('[HLS v11] ' + elementId + ': Native timeout'); nativeDone(); } }, 15000);
       return;
     }
 
@@ -343,7 +537,7 @@
     //  策略 3: Chrome 等 — hls.js + 自定义 Blob Loader
     // ======================================
     if (typeof Hls !== 'undefined' && Hls.isSupported() && store && store.tsBlob && store.m3u8Text) {
-      console.log('[HLS v10] ' + elementId + ': Using hls.js with local Blob loader');
+      console.log('[HLS v11] ' + elementId + ': Using hls.js with local Blob loader');
 
       if (hlsInstances[elementId]) {
         hlsInstances[elementId].destroy();
@@ -371,13 +565,13 @@
       hls.attachMedia(el);
 
       hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        console.log('[HLS v10] ' + elementId + ': Manifest parsed (from Blob)');
+        console.log('[HLS v11] ' + elementId + ': Manifest parsed (from Blob)');
         if (onReady) onReady();
       });
 
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
-          console.warn('[HLS v10] ' + elementId + ': hls.js fatal error, using TS Blob URL directly');
+          console.warn('[HLS v11] ' + elementId + ': hls.js fatal error, using TS Blob URL directly');
           hls.destroy();
           delete hlsInstances[elementId];
           // 降级：直接用 TS Blob URL
@@ -394,7 +588,7 @@
       hlsInstances[elementId] = hls;
     } else if (store && store.tsBlobUrl) {
       // hls.js 不可用但有 Blob：直接设 src
-      console.log('[HLS v10] ' + elementId + ': No hls.js, using TS Blob URL');
+      console.log('[HLS v11] ' + elementId + ': No hls.js, using TS Blob URL');
       el.src = store.tsBlobUrl;
       el.load();
       el.addEventListener('loadedmetadata', function onMeta() {
@@ -409,7 +603,7 @@
       });
     } else {
       // 极端降级
-      console.log('[HLS v10] ' + elementId + ': Full fallback mode');
+      console.log('[HLS v11] ' + elementId + ': Full fallback mode');
       el.src = config.fallback;
       el.load();
       if (onReady) onReady();
@@ -430,7 +624,7 @@
 
         // 拦截 m3u8 请求
         if (url.indexOf('.m3u8') !== -1 && store.m3u8Text) {
-          console.log('[HLS v10 BlobLoader] Serving m3u8 from memory');
+          console.log('[HLS v11 BlobLoader] Serving m3u8 from memory');
           // 改写 m3u8 内容中的 TS 文件名为 Blob URL
           var rewrittenM3u8 = store.m3u8Text;
           if (store.tsBlobUrl && store.tsFileName) {
@@ -453,7 +647,7 @@
 
         // 拦截 TS 请求 — 如果 URL 是 Blob URL 或匹配 TS 文件名
         if ((url.indexOf('.ts') !== -1 || url.indexOf('blob:') === 0) && store.tsBlob) {
-          console.log('[HLS v10 BlobLoader] Serving TS from Blob (' + (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB)');
+          console.log('[HLS v11 BlobLoader] Serving TS from Blob (' + (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB)');
           
           // 处理 byte-range 请求
           var rangeStart = 0;
@@ -510,7 +704,7 @@
     var unlock = function () {
       if (mediaUnlocked) return;
       mediaUnlocked = true;
-      console.log('[HLS v10] User interaction detected, unlocking media');
+      console.log('[HLS v11] User interaction detected, unlocking media');
 
       document.removeEventListener('touchstart', unlock, true);
       document.removeEventListener('touchend', unlock, true);
@@ -534,7 +728,7 @@
   }
 
   // ==========================================
-  //  主预加载系统 v10：先下载后播放
+  //  主预加载系统 v11：缓存优先 + 断点续传
   // ==========================================
   var loadingComplete = false;
   var isRetrying = false;
@@ -559,36 +753,101 @@
     // 注入重试按钮
     ensureRetryButton();
 
+    if (statusText) statusText.textContent = '🔍 检查缓存...';
+    if (progressText) progressText.textContent = '正在检查本地缓存';
+    hideRetryButton();
+
+    // ========================================
+    //  第 0 步：缓存完整性检查 — 全部命中则秒开
+    // ========================================
+    checkAllCached().then(function (cacheCheck) {
+      if (cacheCheck.allCached) {
+        console.log('[HLS v11] ✅ All files found in Cache API! Loading from cache...');
+        if (statusText) statusText.textContent = '⚡ 从本地缓存加载中...';
+        if (progressFill) progressFill.style.width = '80%';
+        updateDownloadListUI('cached');
+
+        // 从缓存恢复 blobStore
+        var resourceIds = Object.keys(HLS_SOURCES);
+        resourceIds.forEach(function (id) {
+          var r = cacheCheck.results[id];
+          blobStore[id] = {
+            tsBlob: r.tsBlob,
+            tsBlobUrl: URL.createObjectURL(r.tsBlob),
+            tsFileName: HLS_SOURCES[id].ts.split('/').pop(),
+            m3u8Text: r.m3u8Text
+          };
+        });
+
+        // 直接初始化播放器
+        return initPlayersAfterDownload(resourceIds, progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds.length * 2); // 全部缓存命中
+      }
+
+      // 部分命中或全不命中 → 正常下载流程（带断点续传）
+      var cachedIds = [];
+      var uncachedIds = [];
+      var resourceIds = Object.keys(HLS_SOURCES);
+      resourceIds.forEach(function (id) {
+        var r = cacheCheck.results[id];
+        if (r && r.cached && r.m3u8Cached) {
+          cachedIds.push(id);
+          // 预填 blobStore
+          blobStore[id] = {
+            tsBlob: r.tsBlob,
+            tsBlobUrl: URL.createObjectURL(r.tsBlob),
+            tsFileName: HLS_SOURCES[id].ts.split('/').pop(),
+            m3u8Text: r.m3u8Text
+          };
+        } else {
+          uncachedIds.push(id);
+        }
+      });
+
+      if (cachedIds.length > 0) {
+        console.log('[HLS v11] Partial cache hit: ' + cachedIds.join(', ') + ' from cache; downloading: ' + uncachedIds.join(', '));
+      }
+
+      return startDownloadFlow(resourceIds, cachedIds, progressFill, progressText, statusText, loadingOverlay, modeCards);
+    });
+  }
+
+  // ==========================================
+  //  下载流程（只下载未缓存的文件）
+  // ==========================================
+  function startDownloadFlow(resourceIds, cachedIds, progressFill, progressText, statusText, loadingOverlay, modeCards) {
     // 更新下载文件列表 UI
     updateDownloadListUI('preparing');
 
-    // ========================================
-    //  统一路径：所有平台都先完整下载 TS 文件
-    // ========================================
-    console.log('[HLS v10] Starting full download mode for all platforms');
-
-    var resourceIds = Object.keys(HLS_SOURCES);
+    console.log('[HLS v11] Starting download (with resume support)');
 
     // 收集需要下载的文件
     var downloads = [];
     resourceIds.forEach(function (id) {
       var config = HLS_SOURCES[id];
-      // TS 文件是主要下载
+      if (cachedIds.indexOf(id) !== -1) return; // 已缓存，跳过
       downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name, sizeMB: config.sizeMB });
-      // m3u8 播放列表也需要（小文件）
       downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name + ' 列表', sizeMB: 0 });
     });
 
     var totalEstimatedMB = 0;
-    resourceIds.forEach(function (id) { totalEstimatedMB += HLS_SOURCES[id].sizeMB; });
+    resourceIds.forEach(function (id) {
+      if (cachedIds.indexOf(id) === -1) totalEstimatedMB += HLS_SOURCES[id].sizeMB;
+    });
 
     var failedDownloads = [];
     var progressMap = {};
     var downloadedCount = 0;
     var totalDownloads = downloads.length;
 
+    // 已缓存的文件计入进度
+    var cachedMB = 0;
+    cachedIds.forEach(function (id) {
+      if (blobStore[id] && blobStore[id].tsBlob) {
+        cachedMB += blobStore[id].tsBlob.size / 1024 / 1024;
+      }
+    });
+
     function updateProgressUI() {
-      // 计算总下载进度（基于字节）
       var totalLoaded = 0;
       var totalSize = 0;
       var keys = Object.keys(progressMap);
@@ -597,12 +856,11 @@
         totalSize += progressMap[keys[i]].total;
       }
 
-      // 如果还没有文件大小信息，用文件计数估算
       var pct;
       if (totalSize > 0) {
-        pct = Math.min(95, Math.round((totalLoaded / totalSize) * 95)); // 留 5% 给播放器初始化
+        pct = Math.min(95, Math.round((totalLoaded / totalSize) * 95));
       } else {
-        pct = Math.round((downloadedCount / totalDownloads) * 80);
+        pct = Math.round((downloadedCount / Math.max(totalDownloads, 1)) * 80);
       }
 
       if (progressFill) progressFill.style.width = pct + '%';
@@ -610,27 +868,34 @@
       if (totalSize > 0) {
         var mbLoaded = (totalLoaded / 1024 / 1024).toFixed(1);
         var mbTotal = (totalSize / 1024 / 1024).toFixed(1);
-        if (progressText) progressText.textContent = mbLoaded + ' / ' + mbTotal + ' MB (' + pct + '%)';
+        var cacheNote = cachedIds.length > 0 ? ' (+' + cachedMB.toFixed(0) + 'MB 缓存)' : '';
+        if (progressText) progressText.textContent = mbLoaded + ' / ' + mbTotal + ' MB (' + pct + '%)' + cacheNote;
         if (statusText) statusText.textContent = '📥 正在下载媒体文件...';
+      } else if (totalDownloads === 0) {
+        if (progressText) progressText.textContent = '全部从缓存加载';
       } else {
         if (progressText) progressText.textContent = downloadedCount + '/' + totalDownloads + ' 文件 (' + pct + '%)';
         if (statusText) statusText.textContent = '📥 正在下载媒体文件...';
       }
 
-      // 更新文件列表 UI
       updateDownloadListUI('downloading');
     }
 
-    if (statusText) statusText.textContent = '📥 准备下载媒体文件 (~' + totalEstimatedMB + ' MB)...';
-    if (progressText) progressText.textContent = '0 / ~' + totalEstimatedMB + ' MB';
+    if (totalDownloads === 0) {
+      if (statusText) statusText.textContent = '⚡ 全部从缓存加载！';
+      if (progressFill) progressFill.style.width = '90%';
+    } else {
+      if (statusText) statusText.textContent = '📥 准备下载 (~' + totalEstimatedMB + ' MB)...';
+      if (progressText) progressText.textContent = '0 / ~' + totalEstimatedMB + ' MB';
+    }
     hideRetryButton();
     updateProgressUI();
 
-    // 第 1 步：加载 hls.js（并行）
+    // 加载 hls.js（并行）
     var hlsJsReady = loadHlsJs();
 
-    // 第 2 步：并行下载所有文件
-    var cacheHitCount = 0;
+    // 并行下载所有未缓存的文件
+    var cacheHitCount = cachedIds.length * 2; // 每个缓存命中的资源有 ts + m3u8
     var downloadPromises = downloads.map(function (dl) {
       return fetchWithProgress(dl.url, function (loaded, total) {
         progressMap[dl.url] = { loaded: loaded, total: total };
@@ -639,55 +904,60 @@
         downloadedCount++;
         if (result.fromCache) cacheHitCount++;
 
-        // 存储到 blobStore
         if (!blobStore[dl.id]) blobStore[dl.id] = {};
         if (dl.type === 'ts') {
           blobStore[dl.id].tsBlob = result.blob;
           blobStore[dl.id].tsBlobUrl = URL.createObjectURL(result.blob);
-          // 提取 TS 文件名
           var parts = dl.url.split('/');
           blobStore[dl.id].tsFileName = parts[parts.length - 1];
-          console.log('[HLS v10] ✓ TS ready: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB' + (result.fromCache ? ', cached' : '') + ')');
+          console.log('[HLS v11] ✓ TS ready: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB' + (result.fromCache ? ', cached' : '') + ')');
         } else if (dl.type === 'm3u8') {
           blobStore[dl.id].m3u8Blob = result.blob;
-          // 读取 m3u8 文本内容
           return result.blob.text().then(function (text) {
             blobStore[dl.id].m3u8Text = text;
-            console.log('[HLS v10] ✓ m3u8 ready: ' + dl.url);
+            console.log('[HLS v11] ✓ m3u8 ready: ' + dl.url);
           });
         }
 
         updateProgressUI();
         return { success: true };
       }).catch(function (err) {
-        console.error('[HLS v10] ✗ Failed: ' + dl.url, err.message);
+        console.error('[HLS v11] ✗ Failed: ' + dl.url, err.message);
         failedDownloads.push(dl);
         return { success: false, error: err };
       });
     });
 
-    // 第 3 步：等待所有下载完成，初始化播放器
+    // 等待所有下载完成
     Promise.all([hlsJsReady].concat(downloadPromises)).then(function () {
       if (loadingComplete) return;
 
-      // 检查关键 TS 文件是否都下载成功
       var criticalFailed = failedDownloads.filter(function (d) { return d.type === 'ts'; });
 
       if (criticalFailed.length > 0) {
         var failedNames = criticalFailed.map(function (d) { return d.name; });
         if (statusText) statusText.textContent = '❌ ' + criticalFailed.length + ' 个文件下载失败: ' + failedNames.join(', ');
-        if (progressText) progressText.textContent = '下载失败，请重试';
+        if (progressText) progressText.textContent = '下载失败，请重试（已下载部分已保存，重试可断点续传）';
         showRetryButton();
         updateDownloadListUI('error');
         return;
       }
 
-      // 所有 TS 文件下载成功！
-      console.log('[HLS v10] ✅ All files downloaded! Initializing players...');
-      if (statusText) statusText.textContent = '⏳ 正在初始化播放器...';
-      if (progressFill) progressFill.style.width = '96%';
-      updateDownloadListUI('initializing');
+      console.log('[HLS v11] ✅ All files ready! Initializing players...');
+      initPlayersAfterDownload(resourceIds, progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
+    });
+  }
 
+  // ==========================================
+  //  播放器初始化（下载完成后统一调用）
+  // ==========================================
+  function initPlayersAfterDownload(resourceIds, progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount) {
+    if (statusText) statusText.textContent = '⏳ 正在初始化播放器...';
+    if (progressFill) progressFill.style.width = '96%';
+    updateDownloadListUI('initializing');
+
+    // 确保 hls.js 已加载
+    loadHlsJs().then(function () {
       var setupCompleted = 0;
       var totalSetups = resourceIds.length;
 
@@ -695,14 +965,14 @@
         setupPlayerFromBlob(id,
           function onReady() {
             setupCompleted++;
-            console.log('[HLS v10] Player ready: ' + id + ' (' + setupCompleted + '/' + totalSetups + ')');
+            console.log('[HLS v11] Player ready: ' + id + ' (' + setupCompleted + '/' + totalSetups + ')');
             if (setupCompleted >= totalSetups) {
               finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
             }
           },
           function onError() {
             setupCompleted++;
-            console.warn('[HLS v10] Player setup had issues: ' + id);
+            console.warn('[HLS v11] Player setup had issues: ' + id);
             if (setupCompleted >= totalSetups) {
               finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
             }
@@ -713,7 +983,7 @@
       // 超时保护
       setTimeout(function () {
         if (!loadingComplete) {
-          console.warn('[HLS v10] Player init timeout, forcing entry');
+          console.warn('[HLS v11] Player init timeout, forcing entry');
           finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
         }
       }, 15000);
@@ -721,7 +991,7 @@
   }
 
   // ==========================================
-  //  下载文件列表 UI（增强版进度显示）
+  //  下载文件列表 UI（增强版 — 含缓存状态）
   // ==========================================
   function updateDownloadListUI(phase) {
     var listContainer = document.querySelector('#download-file-list');
@@ -740,7 +1010,11 @@
       var status = '等待中';
       var statusClass = 'pending';
 
-      if (phase === 'error') {
+      if (phase === 'cached' && store && store.tsBlob) {
+        icon = '⚡';
+        status = (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB 缓存';
+        statusClass = 'done';
+      } else if (phase === 'error' && (!store || !store.tsBlob)) {
         icon = '❌';
         status = '失败';
         statusClass = 'error';
@@ -772,18 +1046,22 @@
     if (loadingComplete) return;
     loadingComplete = true;
 
-    console.log('[HLS v10] ✅ All resources ready. Entering app!');
+    console.log('[HLS v11] ✅ All resources ready. Entering app!');
 
     var totalMB = 0;
     Object.keys(blobStore).forEach(function (id) {
       if (blobStore[id].tsBlob) totalMB += blobStore[id].tsBlob.size / 1024 / 1024;
     });
 
+    var totalFiles = Object.keys(HLS_SOURCES).length * 2; // ts + m3u8 per resource
+
     if (statusText) {
-      if (cacheHitCount > 0) {
-        statusText.textContent = '✅ 加载完成！(' + totalMB.toFixed(1) + ' MB, ' + cacheHitCount + ' 个从缓存加载)';
+      if (cacheHitCount >= totalFiles) {
+        statusText.textContent = '⚡ 秒开！全部从缓存加载 (' + totalMB.toFixed(1) + ' MB)';
+      } else if (cacheHitCount > 0) {
+        statusText.textContent = '✅ 加载完成！(' + totalMB.toFixed(1) + ' MB, ' + Math.floor(cacheHitCount / 2) + ' 个从缓存)';
       } else {
-        statusText.textContent = '✅ 下载完成！(' + totalMB.toFixed(1) + ' MB)';
+        statusText.textContent = '✅ 下载完成！(' + totalMB.toFixed(1) + ' MB, 已缓存供下次秒开)';
       }
     }
     if (progressFill) progressFill.style.width = '100%';
@@ -812,7 +1090,7 @@
     if (document.querySelector('#loading-retry-btn')) return;
     var btn = document.createElement('button');
     btn.id = 'loading-retry-btn';
-    btn.textContent = '🔄 重新下载';
+    btn.textContent = '🔄 断点续传';
     btn.style.cssText = 'display:none; margin-top:16px; padding:10px 28px; font-size:1rem; font-weight:700; color:#fff; background:linear-gradient(135deg,#FF6B6B,#4ECDC4); border:none; border-radius:30px; cursor:pointer; transition:transform 0.2s,box-shadow 0.2s; box-shadow:0 4px 15px rgba(78,205,196,0.3);';
     btn.addEventListener('mouseenter', function () { btn.style.transform = 'scale(1.05)'; });
     btn.addEventListener('mouseleave', function () { btn.style.transform = 'scale(1)'; });

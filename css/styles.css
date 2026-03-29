@@ -92,6 +92,54 @@ html, body {
 }
 @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
+/* 下载文件列表 */
+.download-file-list {
+  width: 320px; max-width: 85vw;
+  margin-bottom: 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.download-file-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+}
+.download-file-item .dl-icon {
+  font-size: 1rem; flex-shrink: 0;
+}
+.download-file-item .dl-name {
+  flex: 1; color: var(--text-secondary); font-weight: 600;
+}
+.download-file-item .dl-status {
+  font-size: 0.75rem; font-weight: 600;
+  padding: 2px 8px; border-radius: 8px;
+  white-space: nowrap;
+}
+.download-file-item .dl-status.pending {
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+}
+.download-file-item .dl-status.downloading {
+  color: #4ECDC4;
+  background: rgba(78,205,196,0.1);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.download-file-item .dl-status.done {
+  color: #96CEB4;
+  background: rgba(150,206,180,0.1);
+}
+.download-file-item .dl-status.error {
+  color: #FF6B6B;
+  background: rgba(255,107,107,0.1);
+}
+.download-file-item .dl-status.init {
+  color: #FFEAA7;
+  background: rgba(255,234,167,0.1);
+}
+
 /* ============================================
    模式选择界面
    ============================================ */
@@ -1032,6 +1080,32 @@ audio { display: none; }
 .loading-overlay .loading-text {
   color: #A0887A;
   font-weight: 500;
+}
+
+/* 下载文件列表 卡通化 */
+.loading-overlay .download-file-item {
+  background: rgba(255,255,255,0.7);
+  border-color: rgba(0,0,0,0.06);
+  backdrop-filter: blur(6px);
+}
+.loading-overlay .download-file-item .dl-name {
+  color: #5D4E3A;
+}
+.loading-overlay .download-file-item .dl-status.pending {
+  color: #B0A090;
+  background: rgba(0,0,0,0.04);
+}
+.loading-overlay .download-file-item .dl-status.downloading {
+  color: #3AAFA9;
+  background: rgba(58,175,169,0.12);
+}
+.loading-overlay .download-file-item .dl-status.done {
+  color: #6BBF8A;
+  background: rgba(107,191,138,0.12);
+}
+.loading-overlay .download-file-item .dl-status.error {
+  color: #E76F6F;
+  background: rgba(231,111,111,0.12);
 }
 
 /* --- 首页背景 --- */

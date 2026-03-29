@@ -1,29 +1,18 @@
 /**
- * Six Little Ducks - HLS 媒体加载器 v9
+ * Six Little Ducks - HLS 媒体加载器 v10
  * 
- * 核心原则：所有媒体文件就绪后才允许进入，但兼容 iOS 设备内存限制
+ * 核心架构：先下载后播放（Download-then-Play）
  * 
- * v9 变更：
- * - 音频 HLS 从 byte-range 单文件模式改为独立分片模式（修复 CF Pages 不支持 Range 的问题）
- * - 视频 HLS 重新编码为均匀 2 秒分片（消除大分片导致的 12 秒卡顿）
- * - hls.js 配置优化：更激进的预缓冲 + 低延迟分片加载策略
- * - iOS Safari：使用原生 HLS 播放 m3u8（所有分片已改为独立模式，无需 Range 请求）
- * - 新增 Cloudflare Pages _headers 配置支持
+ * v10 重大变更：
+ * - 每个媒体流使用单个完整 TS 文件（不分片）
+ * - 打开页面先完整下载所有 TS 文件，显示下载进度条
+ * - 下载完成后创建 Blob URL，本地播放
+ * - Chrome/桌面：hls.js 自定义 loader 从 Blob 读取
+ * - iOS Safari/iPad：直接用 Blob URL 设 video.src（Safari 原生支持 TS）
+ * - 全平台兼容：iPhone Safari, iPad Safari, Chrome, macOS Safari
+ * - 彻底解决 CF Pages 不支持 206 Range 请求的问题
  * 
- * v8 变更（保留）：
- * - 适配 Cloudflare Pages 部署（单文件 25MB 限制）
- * - MP4 视频压缩至 25MB 以内（CRF 28，H.264 Main profile）
- * 
- * v7 变更（保留）：
- * - 后台缓存改用隐藏 <video>/<audio> 原生预加载
- * 
- * v6 变更（保留）：
- * - 修复 iOS 路径 loadingComplete 双重设置导致永远卡在"初始化播放器"的 bug
- * 
- * 非 iOS 模式：
- * - 预下载 m3u8 播放列表（HLS 分片由 hls.js 按需加载）
- * - 下载失败自动重试（最多3次），仍失败则降级到 fallback 源
- * - Loading 遮罩在所有文件就绪前绝不消失
+ * 保持 window.HLSLoader.preloadAllResourcesHLS() 接口不变
  */
 
 (function () {
@@ -32,7 +21,7 @@
   // ==========================================
   //  缓存配置
   // ==========================================
-  var CACHE_NAME = 'six-little-ducks-media-v1';
+  var CACHE_NAME = 'six-little-ducks-media-v2';
   var cacheAvailable = 'caches' in window;
 
   // ==========================================
@@ -44,28 +33,39 @@
   const isIOSSafari = isIOS;
 
   // ==========================================
-  //  HLS 源配置
+  //  HLS 源配置 — 单文件 TS + m3u8
   // ==========================================
   const HLS_SOURCES = {
     'perf-video': {
       hls: 'media/hls/video-muted/index.m3u8',
+      ts: 'media/hls/video-muted/video-muted.ts',
       fallback: 'media/six-little-ducks-video-muted.mp4',
       type: 'video',
-      name: '表演视频'
+      name: '表演视频',
+      sizeMB: 23 // 近似大小，用于 UI 预估
     },
     'prac-video': {
       hls: 'media/hls/video/index.m3u8',
+      ts: 'media/hls/video/video.ts',
       fallback: 'media/six-little-ducks-video.mp4',
       type: 'video',
-      name: '练习视频'
+      name: '练习视频',
+      sizeMB: 25
     },
     'perf-audio': {
       hls: 'media/hls/audio/index.m3u8',
+      ts: 'media/hls/audio/audio.ts',
       fallback: 'media/six-little-ducks-instrumental-extracted.mp3',
       type: 'audio',
-      name: '伴奏音频'
+      name: '伴奏音频',
+      sizeMB: 2
     }
   };
+
+  // ==========================================
+  //  下载后的 Blob 存储
+  // ==========================================
+  const blobStore = {}; // { resourceId: { tsBlob, tsBlobUrl, m3u8Blob, m3u8BlobUrl } }
 
   // ==========================================
   //  HLS 实例管理
@@ -87,14 +87,13 @@
       script.onload = function () {
         hlsJsLoaded = true;
         hlsJsLoading = false;
-        console.log('[HLS] hls.js loaded successfully');
+        console.log('[HLS v10] hls.js loaded successfully');
         hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
       script.onerror = function () {
         hlsJsLoading = false;
-        console.warn('[HLS] Failed to load hls.js from CDN');
-        // hls.js 加载失败不是致命错误，会降级到 fallback
+        console.warn('[HLS v10] Failed to load hls.js from CDN');
         hlsJsCallbacks.forEach(cb => cb.resolve());
         hlsJsCallbacks.length = 0;
       };
@@ -105,20 +104,12 @@
   // ==========================================
   //  缓存辅助函数
   // ==========================================
-
-  /**
-   * 将 URL 转为完整绝对路径（用于 Cache API 的 key）
-   */
   function toAbsoluteURL(relativeUrl) {
     var a = document.createElement('a');
     a.href = relativeUrl;
     return a.href;
   }
 
-  /**
-   * 尝试从 Cache API 读取文件
-   * @returns {Promise<Response|null>}
-   */
   function getFromCache(url) {
     if (!cacheAvailable) return Promise.resolve(null);
     var absUrl = toAbsoluteURL(url);
@@ -129,48 +120,34 @@
     });
   }
 
-  /**
-   * 将 Response 存入 Cache API（克隆后存储）
-   */
   function putToCache(url, response) {
     if (!cacheAvailable) return Promise.resolve();
     var absUrl = toAbsoluteURL(url);
     return caches.open(CACHE_NAME).then(function (cache) {
       return cache.put(absUrl, response);
     }).catch(function (err) {
-      console.warn('[HLS Cache] Failed to cache ' + url + ':', err.message);
+      console.warn('[HLS v10 Cache] Failed to cache ' + url + ':', err.message);
     });
   }
 
   // ==========================================
-  //  带进度的 fetch 下载（含重试逻辑 + 缓存优先）
+  //  带进度的 fetch 下载（含重试 + 缓存优先）
   // ==========================================
-
-  /**
-   * 下载单个文件：优先从缓存读取，未命中则网络下载后存入缓存
-   * @param {string} url
-   * @param {Function} onProgress - (loaded, total) 回调
-   * @param {number} maxRetries - 最大重试次数
-   * @returns {Promise<{blob: Blob, fromCache: boolean}>}
-   */
-  function fetchWithRetry(url, onProgress, maxRetries) {
+  function fetchWithProgress(url, onProgress, maxRetries) {
     maxRetries = maxRetries || 3;
 
-    // 第一步：检查缓存
     return getFromCache(url).then(function (cachedResponse) {
       if (cachedResponse) {
-        // 🎯 缓存命中！直接使用，无需网络请求
-        console.log('[HLS Cache] ✓ HIT: ' + url);
+        console.log('[HLS v10 Cache] ✓ HIT: ' + url);
         return cachedResponse.blob().then(function (blob) {
           if (onProgress) onProgress(blob.size, blob.size);
           return { blob: blob, fromCache: true };
         });
       }
 
-      // 缓存未命中，走网络下载
-      console.log('[HLS Cache] ✗ MISS: ' + url + ' → downloading from network');
+      console.log('[HLS v10 Cache] ✗ MISS: ' + url + ' → downloading');
       return fetchFromNetwork(url, onProgress, maxRetries).then(function (blob) {
-        // 下载成功后存入缓存（异步，不阻塞主流程）
+        // 异步存入缓存
         var responseToCache = new Response(blob.slice(0), {
           status: 200,
           headers: { 'Content-Type': guessContentType(url), 'Content-Length': String(blob.size) }
@@ -181,22 +158,14 @@
     });
   }
 
-  /**
-   * 根据 URL 扩展名猜测 Content-Type
-   */
   function guessContentType(url) {
     if (url.indexOf('.mp4') !== -1) return 'video/mp4';
     if (url.indexOf('.mp3') !== -1) return 'audio/mpeg';
     if (url.indexOf('.ts') !== -1) return 'video/mp2t';
     if (url.indexOf('.m3u8') !== -1) return 'application/vnd.apple.mpegurl';
-    if (url.indexOf('.ogg') !== -1) return 'audio/ogg';
     return 'application/octet-stream';
   }
 
-  /**
-   * 从网络下载文件，失败自动重试
-   * @returns {Promise<Blob>}
-   */
   function fetchFromNetwork(url, onProgress, maxRetries) {
     var attempt = 0;
 
@@ -236,7 +205,7 @@
         });
       }).catch(function (err) {
         if (attempt < maxRetries) {
-          console.warn('[HLS] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
+          console.warn('[HLS v10] Retry ' + attempt + '/' + maxRetries + ' for ' + url + ': ' + err.message);
           return new Promise(function (resolve) {
             setTimeout(resolve, 1000 * attempt);
           }).then(tryFetch);
@@ -249,30 +218,40 @@
   }
 
   // ==========================================
-  //  为媒体元素配置 HLS 源
+  //  为媒体元素配置播放源（从本地 Blob）
   // ==========================================
-  function setupHLS(elementId, onReady, onError) {
+  function setupPlayerFromBlob(elementId, onReady, onError) {
     var config = HLS_SOURCES[elementId];
     if (!config) {
-      console.warn('[HLS] Unknown element:', elementId);
+      console.warn('[HLS v10] Unknown element:', elementId);
       if (onError) onError();
       return;
     }
 
     var el = document.getElementById(elementId);
     if (!el) {
-      console.warn('[HLS] Element not found:', elementId);
+      console.warn('[HLS v10] Element not found:', elementId);
       if (onError) onError();
       return;
     }
 
-    // iOS Safari：优先使用原生 HLS 播放 m3u8
-    // v9：所有 HLS 分片已改为独立文件模式（不再使用 byte-range），Safari 原生 HLS 可以正常工作
-    // 如果原生 HLS 失败（如网络问题），降级到 MP4 fallback
+    var store = blobStore[elementId];
+
+    // ======================================
+    //  策略 1: iOS Safari — 直接用 Blob URL
+    //  Safari 原生支持 TS 格式播放
+    // ======================================
     if (isIOSSafari) {
-      console.log('[HLS] ' + elementId + ': iOS detected, trying native HLS first (independent segments)');
-      el.src = config.hls;
-      el.preload = 'auto'; // iOS 原生 HLS 可以 auto 预加载
+      console.log('[HLS v10] ' + elementId + ': iOS mode — using Blob URL directly');
+
+      if (store && store.tsBlobUrl) {
+        // 优先用 TS Blob URL
+        el.src = store.tsBlobUrl;
+      } else if (config.fallback) {
+        // 降级用原始 fallback URL
+        el.src = config.fallback;
+      }
+      el.preload = 'auto';
 
       var iosReady = false;
       function iosDone() {
@@ -281,28 +260,29 @@
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
-        console.log('[HLS] ' + elementId + ': Ready (iOS native HLS)');
+        console.log('[HLS v10] ' + elementId + ': Ready (iOS Blob)');
         if (onReady) onReady();
       }
 
       var iosOnMeta = function () { iosDone(); };
       var iosOnCanPlay = function () { iosDone(); };
       var iosOnErr = function () {
-        console.warn('[HLS] ' + elementId + ': iOS native HLS failed, falling back to MP4');
+        console.warn('[HLS v10] ' + elementId + ': iOS Blob URL failed, trying fallback MP4');
         el.removeEventListener('loadedmetadata', iosOnMeta);
         el.removeEventListener('canplay', iosOnCanPlay);
         el.removeEventListener('error', iosOnErr);
-        // 降级到 MP4
+
+        // 降级到 MP4 fallback
         el.src = config.fallback;
         el.preload = 'metadata';
-        el.addEventListener('loadedmetadata', function onFallback() {
-          el.removeEventListener('loadedmetadata', onFallback);
+        el.addEventListener('loadedmetadata', function onFB() {
+          el.removeEventListener('loadedmetadata', onFB);
           iosDone();
         });
-        el.addEventListener('error', function onFallbackErr() {
-          el.removeEventListener('error', onFallbackErr);
-          console.warn('[HLS] ' + elementId + ': iOS MP4 also failed (will retry on play)');
-          iosDone(); // 即使出错也放行 — play 时浏览器会自动重试
+        el.addEventListener('error', function onFBErr() {
+          el.removeEventListener('error', onFBErr);
+          console.warn('[HLS v10] ' + elementId + ': iOS fallback also failed');
+          iosDone();
         });
         el.load();
       };
@@ -312,122 +292,211 @@
       el.addEventListener('error', iosOnErr);
       el.load();
 
-      // 超时保护：10 秒后放行
-      setTimeout(function () {
-        if (!iosReady) {
-          console.warn('[HLS] ' + elementId + ': iOS HLS timeout, proceeding');
-          iosDone();
-        }
-      }, 10000);
+      // 超时保护
+      setTimeout(function () { if (!iosReady) { console.warn('[HLS v10] ' + elementId + ': iOS timeout'); iosDone(); } }, 10000);
       return;
     }
 
-    // 非 iOS 但支持原生 HLS（macOS Safari 等）
-    if (el.canPlayType('application/vnd.apple.mpegurl')) {
-      console.log('[HLS] ' + elementId + ': Using native HLS');
-      el.src = config.hls;
+    // ======================================
+    //  策略 2: macOS Safari — 原生 HLS 支持
+    //  用 Blob URL 的 m3u8（需要改写路径指向 TS Blob）
+    //  或者直接用 TS Blob URL
+    // ======================================
+    if (el.canPlayType('application/vnd.apple.mpegurl') && !hlsJsLoaded) {
+      console.log('[HLS v10] ' + elementId + ': Native HLS (Safari) — using TS Blob URL');
+
+      if (store && store.tsBlobUrl) {
+        el.src = store.tsBlobUrl;
+      } else {
+        el.src = config.fallback;
+      }
 
       var nativeReady = false;
       function nativeDone() {
         if (nativeReady) return;
         nativeReady = true;
-        el.removeEventListener('loadedmetadata', onLoaded);
-        el.removeEventListener('canplay', onCanPlay);
-        el.removeEventListener('error', onErr);
-        console.log('[HLS] ' + elementId + ': Ready (native HLS)');
+        console.log('[HLS v10] ' + elementId + ': Ready (Native)');
         if (onReady) onReady();
       }
 
-      var onLoaded = function () { nativeDone(); };
-      var onCanPlay = function () { nativeDone(); };
-
-      var onErr = function () {
-        el.removeEventListener('loadedmetadata', onLoaded);
-        el.removeEventListener('canplay', onCanPlay);
+      el.addEventListener('loadedmetadata', function onMeta() {
+        el.removeEventListener('loadedmetadata', onMeta);
+        nativeDone();
+      });
+      el.addEventListener('error', function onErr() {
         el.removeEventListener('error', onErr);
-        console.warn('[HLS] ' + elementId + ': Native HLS failed, using fallback');
+        console.warn('[HLS v10] ' + elementId + ': Native playback failed, trying fallback');
         el.src = config.fallback;
         el.load();
-        el.addEventListener('loadedmetadata', function onFallbackReady() {
-          el.removeEventListener('loadedmetadata', onFallbackReady);
+        el.addEventListener('loadedmetadata', function onFB() {
+          el.removeEventListener('loadedmetadata', onFB);
           nativeDone();
         });
-        el.addEventListener('error', function onFallbackErr() {
-          el.removeEventListener('error', onFallbackErr);
-          nativeDone();
-        });
-      };
-
-      el.addEventListener('loadedmetadata', onLoaded);
-      el.addEventListener('canplay', onCanPlay);
-      el.addEventListener('error', onErr);
+      });
       el.load();
 
-      setTimeout(function () {
-        if (!nativeReady) {
-          console.warn('[HLS] ' + elementId + ': Native init timeout, proceeding anyway');
-          nativeDone();
-        }
-      }, 20000);
+      setTimeout(function () { if (!nativeReady) { console.warn('[HLS v10] ' + elementId + ': Native timeout'); nativeDone(); } }, 15000);
       return;
     }
 
-    // 非 iOS：使用 hls.js
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      console.log('[HLS] ' + elementId + ': Using hls.js');
+    // ======================================
+    //  策略 3: Chrome 等 — hls.js + 自定义 Blob Loader
+    // ======================================
+    if (typeof Hls !== 'undefined' && Hls.isSupported() && store && store.tsBlob && store.m3u8Text) {
+      console.log('[HLS v10] ' + elementId + ': Using hls.js with local Blob loader');
 
       if (hlsInstances[elementId]) {
         hlsInstances[elementId].destroy();
       }
 
+      // 创建自定义 loader，让 hls.js 从内存 Blob 读取
+      var localStore = store;
+      var CustomLoader = createBlobLoader(localStore);
+
       var hls = new Hls({
-        // === 缓冲策略优化 ===
-        maxBufferLength: 30,          // 前方最大缓冲 30 秒（默认 30）
-        maxMaxBufferLength: 120,      // 允许最多缓冲 120 秒
-        maxBufferSize: 60 * 1024 * 1024,  // 最大缓冲 60MB
-        maxBufferHole: 0.5,           // 允许 0.5s 的缓冲空洞
-        // === 预加载策略 ===
+        maxBufferLength: 60,
+        maxMaxBufferLength: 600,
+        maxBufferSize: 120 * 1024 * 1024,
+        maxBufferHole: 0.5,
         startPosition: 0,
-        backBufferLength: 30,         // 保留 30 秒的回退缓冲
-        // === 分片加载优化 ===
-        maxFragLookUpTolerance: 0.25, // 分片查找容差
-        startFragPrefetch: true,      // 启动时预取分片
-        // === 错误恢复 ===
-        fragLoadingMaxRetry: 4,       // 分片加载失败最多重试 4 次
-        fragLoadingRetryDelay: 500,   // 重试延迟 500ms
-        fragLoadingMaxRetryTimeout: 8000, // 最大重试超时 8 秒
-        // === 低延迟 ===
-        lowLatencyMode: false,        // VOD 不需要低延迟模式
-        debug: false
+        backBufferLength: 60,
+        startFragPrefetch: true,
+        fragLoadingMaxRetry: 2,
+        lowLatencyMode: false,
+        debug: false,
+        loader: CustomLoader
       });
 
-      hls.loadSource(config.hls);
+      hls.loadSource(config.hls); // hls.js 会请求 m3u8 → 被 CustomLoader 拦截
       hls.attachMedia(el);
 
       hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        console.log('[HLS] ' + elementId + ': Manifest parsed');
+        console.log('[HLS v10] ' + elementId + ': Manifest parsed (from Blob)');
         if (onReady) onReady();
       });
 
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
-          console.warn('[HLS] ' + elementId + ': Fatal error, using fallback');
+          console.warn('[HLS v10] ' + elementId + ': hls.js fatal error, using TS Blob URL directly');
           hls.destroy();
           delete hlsInstances[elementId];
-          el.src = config.fallback;
+          // 降级：直接用 TS Blob URL
+          if (store.tsBlobUrl) {
+            el.src = store.tsBlobUrl;
+          } else {
+            el.src = config.fallback;
+          }
           el.load();
           if (onReady) onReady();
         }
       });
 
       hlsInstances[elementId] = hls;
+    } else if (store && store.tsBlobUrl) {
+      // hls.js 不可用但有 Blob：直接设 src
+      console.log('[HLS v10] ' + elementId + ': No hls.js, using TS Blob URL');
+      el.src = store.tsBlobUrl;
+      el.load();
+      el.addEventListener('loadedmetadata', function onMeta() {
+        el.removeEventListener('loadedmetadata', onMeta);
+        if (onReady) onReady();
+      });
+      el.addEventListener('error', function onErr() {
+        el.removeEventListener('error', onErr);
+        el.src = config.fallback;
+        el.load();
+        if (onReady) onReady();
+      });
     } else {
       // 极端降级
-      console.log('[HLS] ' + elementId + ': No HLS support, using fallback');
+      console.log('[HLS v10] ' + elementId + ': Full fallback mode');
       el.src = config.fallback;
       el.load();
       if (onReady) onReady();
     }
+  }
+
+  // ==========================================
+  //  自定义 hls.js Blob Loader
+  //  拦截 m3u8 和 TS 文件的请求，从内存 Blob 返回
+  // ==========================================
+  function createBlobLoader(store) {
+    return function (config) {
+      var loader = new Hls.DefaultConfig.loader(config);
+      var originalLoad = loader.load.bind(loader);
+
+      loader.load = function (context, loaderConfig, callbacks) {
+        var url = context.url;
+
+        // 拦截 m3u8 请求
+        if (url.indexOf('.m3u8') !== -1 && store.m3u8Text) {
+          console.log('[HLS v10 BlobLoader] Serving m3u8 from memory');
+          // 改写 m3u8 内容中的 TS 文件名为 Blob URL
+          var rewrittenM3u8 = store.m3u8Text;
+          if (store.tsBlobUrl && store.tsFileName) {
+            rewrittenM3u8 = rewrittenM3u8.replace(store.tsFileName, store.tsBlobUrl);
+          }
+          var response = {
+            url: url,
+            data: rewrittenM3u8
+          };
+          var stats = {
+            trequest: performance.now(),
+            tfirst: performance.now(),
+            tload: performance.now(),
+            loaded: rewrittenM3u8.length,
+            total: rewrittenM3u8.length
+          };
+          callbacks.onSuccess(response, stats, context, null);
+          return;
+        }
+
+        // 拦截 TS 请求 — 如果 URL 是 Blob URL 或匹配 TS 文件名
+        if ((url.indexOf('.ts') !== -1 || url.indexOf('blob:') === 0) && store.tsBlob) {
+          console.log('[HLS v10 BlobLoader] Serving TS from Blob (' + (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB)');
+          
+          // 处理 byte-range 请求
+          var rangeStart = 0;
+          var rangeEnd = store.tsBlob.size;
+          if (context.rangeStart !== undefined && context.rangeEnd !== undefined) {
+            rangeStart = context.rangeStart;
+            rangeEnd = context.rangeEnd;
+          }
+
+          var slice = store.tsBlob.slice(rangeStart, rangeEnd);
+          var reader = new FileReader();
+          reader.onload = function () {
+            var response = {
+              url: url,
+              data: reader.result
+            };
+            var stats = {
+              trequest: performance.now(),
+              tfirst: performance.now(),
+              tload: performance.now(),
+              loaded: slice.size,
+              total: slice.size
+            };
+            callbacks.onSuccess(response, stats, context, null);
+          };
+          reader.onerror = function () {
+            callbacks.onError({ code: 0, text: 'Blob read error' }, context, null, stats);
+          };
+
+          if (context.responseType === 'arraybuffer') {
+            reader.readAsArrayBuffer(slice);
+          } else {
+            reader.readAsArrayBuffer(slice);
+          }
+          return;
+        }
+
+        // 其他请求走默认 loader
+        originalLoad(context, loaderConfig, callbacks);
+      };
+
+      return loader;
+    };
   }
 
   // ==========================================
@@ -441,7 +510,7 @@
     var unlock = function () {
       if (mediaUnlocked) return;
       mediaUnlocked = true;
-      console.log('[HLS] User interaction detected, unlocking media');
+      console.log('[HLS v10] User interaction detected, unlocking media');
 
       document.removeEventListener('touchstart', unlock, true);
       document.removeEventListener('touchend', unlock, true);
@@ -465,10 +534,8 @@
   }
 
   // ==========================================
-  //  预加载系统 v9：iOS 原生 HLS + 非 iOS hls.js + 后台缓存
+  //  主预加载系统 v10：先下载后播放
   // ==========================================
-
-  // 全局状态
   var loadingComplete = false;
   var isRetrying = false;
 
@@ -479,321 +546,250 @@
     var loadingOverlay = document.querySelector('#loading');
     var modeCards = document.querySelectorAll('.mode-card');
 
-    // 确保 loading 遮罩可见且阻止交互
+    // 确保 loading 遮罩可见
     if (loadingOverlay) {
       loadingOverlay.style.display = '';
       loadingOverlay.classList.remove('hidden');
     }
     modeCards.forEach(function (c) { c.style.pointerEvents = 'none'; });
 
-    // 开始 iOS 媒体解锁监听
+    // iOS 媒体解锁
     unlockMediaOnInteraction();
 
-    // 注入重试按钮（只注入一次）
+    // 注入重试按钮
     ensureRetryButton();
 
-    if (isIOSSafari) {
-      // ========================================
-      //  iOS 路径：流式加载 MP4，不预下载大文件
-      // ========================================
-      preloadForIOS(progressFill, progressText, statusText, loadingOverlay, modeCards);
-    } else {
-      // ========================================
-      //  非 iOS 路径：预下载所有媒体文件
-      // ========================================
-      preloadForDesktop(progressFill, progressText, statusText, loadingOverlay, modeCards);
-    }
-  }
+    // 更新下载文件列表 UI
+    updateDownloadListUI('preparing');
 
-  // ==========================================
-  //  iOS 预加载：验证文件可访问 + 流式加载
-  // ==========================================
-  function preloadForIOS(progressFill, progressText, statusText, loadingOverlay, modeCards) {
-    console.log('[HLS] iOS detected — using streaming mode (no full download)');
-
-    var resourceIds = Object.keys(HLS_SOURCES);
-    // iOS v9：验证 HLS m3u8 播放列表（所有分片已改为独立模式，Safari 原生 HLS 可正常工作）
-    // 同时验证 MP4 fallback 作为备用
-    var checkFiles = resourceIds.map(function (id) {
-      return { id: id, url: HLS_SOURCES[id].hls, fallbackUrl: HLS_SOURCES[id].fallback, name: HLS_SOURCES[id].name };
-    });
-
-    var totalFiles = checkFiles.length;
-    var checkedCount = 0;
-    var failedFiles = [];
-
-    if (statusText) statusText.textContent = '⏳ iOS 设备，正在检查媒体文件...';
-    if (progressText) progressText.textContent = '准备中...';
-    updateProgressUI_iOS(progressFill, progressText, 0, totalFiles);
-    hideRetryButton();
-
-    checkFiles.forEach(function (file) {
-      // 验证 HLS m3u8 播放列表可访问
-      fetch(file.url, { method: 'HEAD' })
-        .then(function (resp) {
-          if (resp.ok) {
-            console.log('[HLS iOS] ✓ Accessible: ' + file.url);
-          } else {
-            console.warn('[HLS iOS] ✗ HTTP ' + resp.status + ': ' + file.url);
-            failedFiles.push(file);
-          }
-          checkedCount++;
-          updateProgressUI_iOS(progressFill, progressText, checkedCount, totalFiles);
-
-          if (checkedCount >= totalFiles) {
-            if (failedFiles.length === 0) {
-              finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds);
-            } else {
-              // 有文件不可访问，显示错误
-              var failedNames = failedFiles.map(function (f) { return f.name; });
-              if (statusText) statusText.textContent = '❌ ' + failedFiles.length + ' 个文件不可访问: ' + failedNames.join(', ');
-              showRetryButton();
-            }
-          }
-        })
-        .catch(function (err) {
-          console.error('[HLS iOS] ✗ Network error for ' + file.url + ':', err.message);
-          failedFiles.push(file);
-          checkedCount++;
-          updateProgressUI_iOS(progressFill, progressText, checkedCount, totalFiles);
-
-          if (checkedCount >= totalFiles) {
-            if (failedFiles.length === checkFiles.length) {
-              // 所有文件都失败
-              if (statusText) statusText.textContent = '❌ 网络连接失败，请检查网络后重试';
-              showRetryButton();
-            } else {
-              // 部分失败，仍然尝试继续
-              console.warn('[HLS iOS] Some files failed, proceeding anyway');
-              finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds);
-            }
-          }
-        });
-    });
-
-    // 超时保护：15秒后强制进入（iOS 可能网络慢）
-    setTimeout(function () {
-      if (!loadingComplete && checkedCount >= totalFiles - 1) {
-        console.warn('[HLS iOS] Check timeout, entering anyway');
-        finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds);
-      }
-    }, 15000);
-  }
-
-  function updateProgressUI_iOS(progressFill, progressText, current, total) {
-    var pct = Math.round((current / total) * 100);
-    if (progressFill) progressFill.style.width = pct + '%';
-    if (progressText) progressText.textContent = current + '/' + total + ' 文件就绪 (' + pct + '%)';
-  }
-
-  function finishIOSLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, resourceIds) {
-    // 注意：这里不设 loadingComplete = true，留给 finishLoadingCommon 统一设置
-    // 之前的 bug：这里设了 true 导致 finishLoadingCommon 检查 if(loadingComplete) return 直接退出
-
-    console.log('[HLS iOS] ✅ Files verified, setting up streaming players...');
-
-    if (statusText) statusText.textContent = '⏳ 正在初始化播放器...';
-    if (progressFill) progressFill.style.width = '90%';
-    hideRetryButton();
-
-    // 为每个媒体元素设置 MP4 源（流式加载）
-    var setupCompleted = 0;
-    var totalSetups = resourceIds.length;
-
-    resourceIds.forEach(function (id) {
-      setupHLS(id,
-        function onReady() {
-          setupCompleted++;
-          console.log('[HLS iOS] ' + id + ': Player ready (' + setupCompleted + '/' + totalSetups + ')');
-          if (setupCompleted >= totalSetups) {
-            finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalSetups, totalSetups);
-          }
-        },
-        function onError() {
-          setupCompleted++;
-          console.warn('[HLS iOS] ' + id + ': Setup had issues, continuing');
-          if (setupCompleted >= totalSetups) {
-            finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalSetups, totalSetups);
-          }
-        }
-      );
-    });
-
-    // iOS 超时保护：8秒（MP4 metadata 加载 + loadedmetadata 事件应该很快）
-    setTimeout(function () {
-      if (!loadingComplete) {
-        console.warn('[HLS iOS] Player init timeout, forcing entry');
-        finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, setupCompleted, totalSetups);
-      }
-    }, 8000);
-  }
-
-  // ==========================================
-  //  非 iOS 预加载：完整下载所有文件
-  // ==========================================
-  function preloadForDesktop(progressFill, progressText, statusText, loadingOverlay, modeCards) {
-    console.log('[HLS] Desktop detected — using full download mode');
+    // ========================================
+    //  统一路径：所有平台都先完整下载 TS 文件
+    // ========================================
+    console.log('[HLS v10] Starting full download mode for all platforms');
 
     var resourceIds = Object.keys(HLS_SOURCES);
 
-    // 收集所有需要下载的文件（仅 m3u8 播放列表，HLS 分片由 hls.js 按需加载）
+    // 收集需要下载的文件
     var downloads = [];
     resourceIds.forEach(function (id) {
       var config = HLS_SOURCES[id];
-      downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name });
+      // TS 文件是主要下载
+      downloads.push({ id: id, url: config.ts, type: 'ts', name: config.name, sizeMB: config.sizeMB });
+      // m3u8 播放列表也需要（小文件）
+      downloads.push({ id: id, url: config.hls, type: 'm3u8', name: config.name + ' 列表', sizeMB: 0 });
     });
 
-    var totalFiles = downloads.length;
-    var successCount = 0;
+    var totalEstimatedMB = 0;
+    resourceIds.forEach(function (id) { totalEstimatedMB += HLS_SOURCES[id].sizeMB; });
+
     var failedDownloads = [];
     var progressMap = {};
+    var downloadedCount = 0;
+    var totalDownloads = downloads.length;
 
     function updateProgressUI() {
-      var pct = Math.round((successCount / totalFiles) * 100);
-      if (progressFill) progressFill.style.width = pct + '%';
-      if (progressText) {
-        progressText.textContent = successCount + '/' + totalFiles + ' 文件已下载 (' + pct + '%)';
-      }
-    }
-
-    function updateDetailProgress(url, loaded, total) {
-      progressMap[url] = { loaded: loaded, total: total };
-      var tl = 0, tt = 0;
+      // 计算总下载进度（基于字节）
+      var totalLoaded = 0;
+      var totalSize = 0;
       var keys = Object.keys(progressMap);
       for (var i = 0; i < keys.length; i++) {
-        tl += progressMap[keys[i]].loaded;
-        tt += progressMap[keys[i]].total;
+        totalLoaded += progressMap[keys[i]].loaded;
+        totalSize += progressMap[keys[i]].total;
       }
-      if (tt > 0 && statusText) {
-        var mbLoaded = (tl / 1024 / 1024).toFixed(1);
-        var mbTotal = (tt / 1024 / 1024).toFixed(1);
-        statusText.textContent = '⏳ 正在下载媒体文件 ' + mbLoaded + '/' + mbTotal + ' MB...';
+
+      // 如果还没有文件大小信息，用文件计数估算
+      var pct;
+      if (totalSize > 0) {
+        pct = Math.min(95, Math.round((totalLoaded / totalSize) * 95)); // 留 5% 给播放器初始化
+      } else {
+        pct = Math.round((downloadedCount / totalDownloads) * 80);
       }
+
+      if (progressFill) progressFill.style.width = pct + '%';
+
+      if (totalSize > 0) {
+        var mbLoaded = (totalLoaded / 1024 / 1024).toFixed(1);
+        var mbTotal = (totalSize / 1024 / 1024).toFixed(1);
+        if (progressText) progressText.textContent = mbLoaded + ' / ' + mbTotal + ' MB (' + pct + '%)';
+        if (statusText) statusText.textContent = '📥 正在下载媒体文件...';
+      } else {
+        if (progressText) progressText.textContent = downloadedCount + '/' + totalDownloads + ' 文件 (' + pct + '%)';
+        if (statusText) statusText.textContent = '📥 正在下载媒体文件...';
+      }
+
+      // 更新文件列表 UI
+      updateDownloadListUI('downloading');
     }
 
-    if (statusText) statusText.textContent = '⏳ 正在下载媒体文件...';
-    updateProgressUI();
+    if (statusText) statusText.textContent = '📥 准备下载媒体文件 (~' + totalEstimatedMB + ' MB)...';
+    if (progressText) progressText.textContent = '0 / ~' + totalEstimatedMB + ' MB';
     hideRetryButton();
+    updateProgressUI();
 
-    // 第 1 步：加载 hls.js
+    // 第 1 步：加载 hls.js（并行）
     var hlsJsReady = loadHlsJs();
 
     // 第 2 步：并行下载所有文件
     var cacheHitCount = 0;
     var downloadPromises = downloads.map(function (dl) {
-      return fetchWithRetry(dl.url, function (loaded, total) {
-        updateDetailProgress(dl.url, loaded, total);
-      }, 3).then(function (result) {
-        successCount++;
-        if (result.fromCache) {
-          cacheHitCount++;
-          console.log('[HLS] ✓ From cache: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB)');
-        } else {
-          console.log('[HLS] ✓ Downloaded: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB)');
-        }
+      return fetchWithProgress(dl.url, function (loaded, total) {
+        progressMap[dl.url] = { loaded: loaded, total: total };
         updateProgressUI();
-        if (cacheHitCount > 0 && statusText) {
-          statusText.textContent = '⚡ ' + cacheHitCount + ' 个文件从缓存加载，' + (successCount - cacheHitCount) + ' 个正在下载...';
+      }, 3).then(function (result) {
+        downloadedCount++;
+        if (result.fromCache) cacheHitCount++;
+
+        // 存储到 blobStore
+        if (!blobStore[dl.id]) blobStore[dl.id] = {};
+        if (dl.type === 'ts') {
+          blobStore[dl.id].tsBlob = result.blob;
+          blobStore[dl.id].tsBlobUrl = URL.createObjectURL(result.blob);
+          // 提取 TS 文件名
+          var parts = dl.url.split('/');
+          blobStore[dl.id].tsFileName = parts[parts.length - 1];
+          console.log('[HLS v10] ✓ TS ready: ' + dl.url + ' (' + (result.blob.size / 1024 / 1024).toFixed(1) + ' MB' + (result.fromCache ? ', cached' : '') + ')');
+        } else if (dl.type === 'm3u8') {
+          blobStore[dl.id].m3u8Blob = result.blob;
+          // 读取 m3u8 文本内容
+          return result.blob.text().then(function (text) {
+            blobStore[dl.id].m3u8Text = text;
+            console.log('[HLS v10] ✓ m3u8 ready: ' + dl.url);
+          });
         }
-        return { id: dl.id, url: dl.url, type: dl.type, name: dl.name, blob: result.blob, success: true, fromCache: result.fromCache };
+
+        updateProgressUI();
+        return { success: true };
       }).catch(function (err) {
-        console.error('[HLS] ✗ Failed after retries: ' + dl.url, err.message);
+        console.error('[HLS v10] ✗ Failed: ' + dl.url, err.message);
         failedDownloads.push(dl);
-        return { id: dl.id, url: dl.url, type: dl.type, name: dl.name, error: err, success: false };
+        return { success: false, error: err };
       });
     });
 
-    // 第 3 步：等所有下载完成
-    Promise.all([hlsJsReady].concat(downloadPromises)).then(function (results) {
+    // 第 3 步：等待所有下载完成，初始化播放器
+    Promise.all([hlsJsReady].concat(downloadPromises)).then(function () {
       if (loadingComplete) return;
 
-      if (failedDownloads.length > 0) {
-        var failedNames = failedDownloads.map(function (d) { return d.name + '(' + d.type + ')'; });
-        if (statusText) {
-          statusText.textContent = '❌ ' + failedDownloads.length + ' 个文件下载失败: ' + failedNames.join(', ');
-        }
-        if (progressText) {
-          progressText.textContent = successCount + '/' + totalFiles + ' 文件已下载';
-        }
+      // 检查关键 TS 文件是否都下载成功
+      var criticalFailed = failedDownloads.filter(function (d) { return d.type === 'ts'; });
+
+      if (criticalFailed.length > 0) {
+        var failedNames = criticalFailed.map(function (d) { return d.name; });
+        if (statusText) statusText.textContent = '❌ ' + criticalFailed.length + ' 个文件下载失败: ' + failedNames.join(', ');
+        if (progressText) progressText.textContent = '下载失败，请重试';
         showRetryButton();
+        updateDownloadListUI('error');
         return;
       }
 
-      // 所有文件下载成功！进入播放器初始化
+      // 所有 TS 文件下载成功！
+      console.log('[HLS v10] ✅ All files downloaded! Initializing players...');
       if (statusText) statusText.textContent = '⏳ 正在初始化播放器...';
+      if (progressFill) progressFill.style.width = '96%';
+      updateDownloadListUI('initializing');
 
       var setupCompleted = 0;
       var totalSetups = resourceIds.length;
 
       resourceIds.forEach(function (id) {
-        setupHLS(id,
+        setupPlayerFromBlob(id,
           function onReady() {
             setupCompleted++;
+            console.log('[HLS v10] Player ready: ' + id + ' (' + setupCompleted + '/' + totalSetups + ')');
             if (setupCompleted >= totalSetups) {
-              finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalFiles, totalFiles);
+              finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
             }
           },
           function onError() {
             setupCompleted++;
+            console.warn('[HLS v10] Player setup had issues: ' + id);
             if (setupCompleted >= totalSetups) {
-              finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, totalFiles, totalFiles);
+              finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
             }
           }
         );
       });
 
-      // 桌面超时保护：30秒
+      // 超时保护
       setTimeout(function () {
-        if (!loadingComplete && setupCompleted >= resourceIds.length - 1) {
-          finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, successCount, totalFiles);
+        if (!loadingComplete) {
+          console.warn('[HLS v10] Player init timeout, forcing entry');
+          finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount);
         }
-      }, 30000);
+      }, 15000);
     });
   }
 
   // ==========================================
-  //  iOS 后台静默预加载（进入应用后触发）
-  //  使用隐藏 <video>/<audio> 元素让浏览器原生缓存，避免 Cache API 206 兼容问题
+  //  下载文件列表 UI（增强版进度显示）
   // ==========================================
-  var backgroundCacheStarted = false;
-
-  function startBackgroundCache() {
-    if (!isIOSSafari || backgroundCacheStarted) return;
-    backgroundCacheStarted = true;
-
-    console.log('[HLS iOS] Starting background native preload...');
+  function updateDownloadListUI(phase) {
+    var listContainer = document.querySelector('#download-file-list');
+    if (!listContainer) return;
 
     var resourceIds = Object.keys(HLS_SOURCES);
+    listContainer.innerHTML = '';
+
     resourceIds.forEach(function (id) {
-      var source = HLS_SOURCES[id];
-      // v9: 使用 HLS m3u8 进行后台预加载（独立分片模式）
-      var url = source.hls;
-      var tag = source.type === 'video' ? 'video' : 'audio';
-      var el = document.createElement(tag);
-      el.preload = 'auto';
-      el.muted = true; // 静音避免自动播放策略拦截
-      el.playsInline = true;
-      el.src = url;
-      el.style.display = 'none';
-      el.load();
-      document.body.appendChild(el);
-      console.log('[HLS iOS] Background preload started: ' + url);
+      var config = HLS_SOURCES[id];
+      var store = blobStore[id];
+      var item = document.createElement('div');
+      item.className = 'download-file-item';
+
+      var icon = '📦';
+      var status = '等待中';
+      var statusClass = 'pending';
+
+      if (phase === 'error') {
+        icon = '❌';
+        status = '失败';
+        statusClass = 'error';
+      } else if (store && store.tsBlob) {
+        icon = '✅';
+        status = (store.tsBlob.size / 1024 / 1024).toFixed(1) + ' MB';
+        statusClass = 'done';
+      } else if (phase === 'downloading') {
+        icon = '⏳';
+        status = '下载中...';
+        statusClass = 'downloading';
+      } else if (phase === 'initializing') {
+        icon = '⚙️';
+        status = '初始化...';
+        statusClass = 'init';
+      }
+
+      item.innerHTML = '<span class="dl-icon">' + icon + '</span>' +
+        '<span class="dl-name">' + config.name + '</span>' +
+        '<span class="dl-status ' + statusClass + '">' + status + '</span>';
+      listContainer.appendChild(item);
     });
   }
 
   // ==========================================
-  //  通用完成处理
+  //  完成加载
   // ==========================================
-  function finishLoadingCommon(progressFill, progressText, statusText, loadingOverlay, modeCards, loadedCount, totalCount) {
+  function finishLoading(progressFill, progressText, statusText, loadingOverlay, modeCards, cacheHitCount) {
     if (loadingComplete) return;
     loadingComplete = true;
 
-    console.log('[HLS] ✅ All resources ready. Entering app!');
+    console.log('[HLS v10] ✅ All resources ready. Entering app!');
 
-    if (statusText) statusText.textContent = '✅ 所有资源加载完成！';
+    var totalMB = 0;
+    Object.keys(blobStore).forEach(function (id) {
+      if (blobStore[id].tsBlob) totalMB += blobStore[id].tsBlob.size / 1024 / 1024;
+    });
+
+    if (statusText) {
+      if (cacheHitCount > 0) {
+        statusText.textContent = '✅ 加载完成！(' + totalMB.toFixed(1) + ' MB, ' + cacheHitCount + ' 个从缓存加载)';
+      } else {
+        statusText.textContent = '✅ 下载完成！(' + totalMB.toFixed(1) + ' MB)';
+      }
+    }
     if (progressFill) progressFill.style.width = '100%';
-    if (progressText) progressText.textContent = totalCount + '/' + totalCount + ' 文件就绪 (100%)';
+    if (progressText) progressText.textContent = totalMB.toFixed(1) + ' MB 已就绪 (100%)';
     hideRetryButton();
+    updateDownloadListUI('done');
 
     // 恢复模式卡片交互
     modeCards.forEach(function (c) { c.style.pointerEvents = ''; });
@@ -806,12 +802,7 @@
           loadingOverlay.style.display = 'none';
         }, 600);
       }
-    }, 500);
-
-    // iOS：进入后启动后台静默预缓存
-    if (isIOSSafari) {
-      startBackgroundCache();
-    }
+    }, 800);
   }
 
   // ==========================================
@@ -829,7 +820,6 @@
       if (isRetrying) return;
       isRetrying = true;
       loadingComplete = false;
-      // 重新开始完整预加载流程
       preloadAllResourcesHLS();
       isRetrying = false;
     });
@@ -849,6 +839,13 @@
   }
 
   // ==========================================
+  //  兼容旧接口 setupHLS（app.js 不使用，但保持向后兼容）
+  // ==========================================
+  function setupHLS(elementId, onReady, onError) {
+    setupPlayerFromBlob(elementId, onReady, onError);
+  }
+
+  // ==========================================
   //  销毁
   // ==========================================
   function destroyHLS(elementId) {
@@ -856,12 +853,19 @@
       hlsInstances[elementId].destroy();
       delete hlsInstances[elementId];
     }
+    // 释放 Blob URL
+    if (blobStore[elementId] && blobStore[elementId].tsBlobUrl) {
+      URL.revokeObjectURL(blobStore[elementId].tsBlobUrl);
+    }
   }
 
   function destroyAllHLS() {
     Object.keys(hlsInstances).forEach(function (id) {
       hlsInstances[id].destroy();
       delete hlsInstances[id];
+    });
+    Object.keys(blobStore).forEach(function (id) {
+      if (blobStore[id].tsBlobUrl) URL.revokeObjectURL(blobStore[id].tsBlobUrl);
     });
   }
 
@@ -877,7 +881,8 @@
     destroyHLS: destroyHLS,
     destroyAllHLS: destroyAllHLS,
     unlockMediaOnInteraction: unlockMediaOnInteraction,
-    HLS_SOURCES: HLS_SOURCES
+    HLS_SOURCES: HLS_SOURCES,
+    blobStore: blobStore
   };
 
 })();
